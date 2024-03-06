@@ -1,0 +1,14 @@
+++ gunzip -c ../chr22.fa.gz
+++ trf409.macosx chr22.fa 2 10000000 10000000 80 10 2 2000 -h -l 6 -ngs
+
+real	4m41.104s
+user	4m38.551s
+sys	0m0.919s
+++ rm chr22.fa
+++ python3 -m str_analysis.convert_dat_to_bed chr22.trf.dat
+++ cat chr22.trf.bed
+++ awk -F '	' '{ if( length($4) <= 6 ) { print $0 } }'
+++ mv chr22.trf.filtered.bed chr22.trf.bed
+++ set +x
+TRF output:
+66282 chr22.trf.bed

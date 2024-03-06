@@ -1,0 +1,19 @@
+++ gunzip -c ../chr22.fa.gz
+++ PERF -a -l 9 -u 3 -i chr22.fa
+Using length cutoff of 9
+  0%|          | 0/1 [00:00<?, ?it/s]Processing chr22:   0%|          | 0/1 [00:00<?, ?it/s]Processing chr22: 100%|██████████| 1/1 [00:25<00:00, 25.18s/it]Processing chr22: 100%|██████████| 1/1 [00:25<00:00, 25.19s/it]
+Writing header
+
+Generating HTML report. This may take a while..
+
+HTML report successfully saved to chr22_perf.html
+
+real	0m25.898s
+user	0m26.040s
+sys	0m0.566s
+++ rm chr22.fa
+++ mv chr22_perf.bed chr22.perf.bed
+++ rm chr22_perf.tsv chr22_perf.html
+++ set +x
+PERF output:
+67511 chr22.perf.bed
