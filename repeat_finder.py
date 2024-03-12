@@ -1,4 +1,3 @@
-# copied from https://colab.research.google.com/drive/1wa_96-zPbsJpQpEyVnQMJ2bwMtYZ5Mq8#scrollTo=36bfbda3
 import argparse
 import pyfastx
 import matplotlib.pyplot as plt
@@ -7,15 +6,23 @@ import numpy as np
 import os
 import re
 
-plt.rcParams['figure.figsize'] = [16.5, 5]
-plt.rcParams['font.size'] = 12
-
 
 class RepeatTracker:
     """This class tracks repeats of a single motif size in a given input sequence. It outputs all perfect repeats of
     this that pass filter criteria while scanning the input sequence from left to right"""
 
     def __init__(self, motif_size, min_repeats, min_span, input_sequence, output_intervals):
+        """Initialize a RepeatTracker object.
+
+        Args:
+            motif_size (int): The motif size (in base pairs) that will be tracked by this RepeatTracker.
+            min_repeats (int): Only add repeats to the output when there's at least this many repeats in a row.
+            min_span (int):  Only add repeats to the output when they span at least this many base pairs.
+            input_sequence (str): The input sequence.
+            output_intervals (dict): A dictionary to store detected repeats. The key is (start_0based, end) and the
+                value is the detected motif.
+        """
+
         self.motif_size = motif_size
         self.min_repeats = min_repeats
         self.min_span = min_span
@@ -26,6 +33,8 @@ class RepeatTracker:
         self.run_length = 1
 
     def advance(self):
+        """Increment current position within the input sequence while updating internal state and recording any detected repeats"""
+
         seq = self.input_sequence
         i = self.current_position
         period = self.motif_size
@@ -38,15 +47,19 @@ class RepeatTracker:
             self.run_length += 1
             return
 
-        #print(f"Mismatch for {period} bp motif at {i} {seq[i:i+period]}")
         self.output_interval_if_it_passes_filters()
         self.current_position += 1
         self.run_length = 1
 
     def done(self):
+        """Output the last interval if it passes filters"""
         self.output_interval_if_it_passes_filters()
 
     def output_interval_if_it_passes_filters(self):
+        """Check internal state to see if enough repeats have accumulated to output an interval. If yes, add it to
+        the output.
+        """
+
         seq = self.input_sequence
         i = self.current_position
         period = self.motif_size
@@ -111,12 +124,10 @@ def detect_repeats(input_sequence, filter_settings, verbose=False):
     if not getattr(filter_settings, "min_span") or filter_settings.min_span < 1:
         raise ValueError(f"min_span is set to {filter_settings.min_span}. It must be at least 1.")
 
-    # dictionary to store detected repeats. The key is (start_0based, end) and the value is the detected motif.
-    output_intervals = {}
-
     input_sequence = input_sequence.upper()
 
     # generate all intervals
+    output_intervals = {}
     run_trackers = []
     for motif_size in range(filter_settings.min_motif_size, filter_settings.max_motif_size + 1):
         run_tracker = RepeatTracker(
@@ -143,7 +154,20 @@ def detect_repeats(input_sequence, filter_settings, verbose=False):
     return [(start_0based, end, motif) for (start_0based, end), motif in sorted(output_intervals.items())]
 
 
-def plot_results(input_sequence, output_intervals, max_motif_size, output_filename):
+def plot_results(input_sequence, output_intervals, max_motif_size, output_path):
+    """Plot the repeats detected in the given input sequence. This code was copied from
+    https://colab.research.google.com/drive/1wa_96-zPbsJpQpEyVnQMJ2bwMtYZ5Mq8#scrollTo=36bfbda3
+
+    Args:
+        input_sequence (str): The input sequence.
+        output_intervals (list): A list of (start_0based, end, motif) tuples representing all repeats detected in the input sequence.
+        max_motif_size (int): The maximum motif size in base pairs.
+        output_path (str): The output image filename for the plot.
+
+    """
+
+    plt.rcParams['figure.figsize'] = [16.5, 5]
+    plt.rcParams['font.size'] = 12
 
     matrix = [[0 for _ in range(len(input_sequence))] for _ in range(max_motif_size)]
     for start_0based, end, motif in output_intervals:
@@ -165,9 +189,8 @@ def plot_results(input_sequence, output_intervals, max_motif_size, output_filena
     ax2.set_ylabel("Fraction of matches")
     ax2.set_xlabel("Period");
 
-    #plt.show()
-    plt.savefig(output_filename)
-    print(f"Wrote {output_filename}")
+    plt.savefig(output_path)
+    print(f"Wrote {output_path}")
 
 
 def main():
