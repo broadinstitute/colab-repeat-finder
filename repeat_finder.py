@@ -54,14 +54,11 @@ class RepeatTracker:
         # found mismatch, check if previous run is worth outputing
         start_0based = i - self.run_length + 1
         motif = seq[start_0based:start_0based + period]
-        if motif == "N":
+        if "N" in motif:
             return
 
-        #if len(motif) == 2:
-        #    print(f"start_0based={start_0based}, i={i}, run_length={self.run_length}, motif={motif}")
         if self.run_length + period - 1 >= self.min_span and self.run_length + period - 1 >= self.min_repeats * period:
             while i < len(seq) - 1 and seq[i+1] == seq[i+1 - period]:
-                #print("Increment by 1")
                 self.run_length += 1
                 i += 1
 
@@ -70,10 +67,7 @@ class RepeatTracker:
 
             previous_motif = self.output_intervals.get((start_0based, end))
             if previous_motif is None or len(motif) < len(previous_motif):
-                #print(f"Adding: {(end - start_0based)/len(motif):0.1f} x {motif} [{start_0based}-{end}]")
                 self.output_intervals[(start_0based, end)] = motif
-            #else:
-            #    print(f"Skipping: {(end - start_0based)/len(motif):0.1f} x {motif} [{start_0based}-{end}]")
 
 
 def shift_string_by(string, shift):
@@ -120,6 +114,8 @@ def detect_repeats(input_sequence, filter_settings, verbose=False):
     # dictionary to store detected repeats. The key is (start_0based, end) and the value is the detected motif.
     output_intervals = {}
 
+    input_sequence = input_sequence.upper()
+
     # generate all intervals
     run_trackers = []
     for motif_size in range(filter_settings.min_motif_size, filter_settings.max_motif_size + 1):
@@ -155,7 +151,6 @@ def plot_results(input_sequence, output_intervals, max_motif_size, output_filena
         for i in range(start_0based, end + 1):
             matrix[row][i] = abs(hash(motif)) % 10 + 1
 
-    #%%
     fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(10, 8))
     cmap = ListedColormap(['#F3F3F3'] + list(plt.get_cmap("Pastel2", 12).colors))
     ax1.set_xticks(range(0, len(input_sequence)), minor=True)
@@ -243,7 +238,6 @@ def main():
     else:
         parser.error(f"Invalid input: {args.input_sequence}. This should be a FASTA file path or a string of nucleotides.")
 
-    # detect repeats
     if args.plot and interval_sequence:
         if len(interval_sequence) > 5_000:
             print(f"Warning: The input sequence is too long ({len(sequence_to_plot):,d} bp). Skipping plot...")
