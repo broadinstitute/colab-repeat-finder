@@ -6,7 +6,6 @@ from repeat_finder import shift_string_by, detect_repeats
 class RepeatFinderTests(unittest.TestCase):
 
 	def test_shift_string_by(self):
-
 		self.assertEqual(shift_string_by("A", 1), "A")
 		self.assertEqual(shift_string_by("TTTCG", 0), "TTTCG")
 		self.assertEqual(shift_string_by("TTTCG", 1), "GTTTC")
@@ -20,8 +19,8 @@ class RepeatFinderTests(unittest.TestCase):
 		filter_settings = argparse.Namespace(
 			min_motif_size=1,
 			max_motif_size=7,
-			min_repeats=1,
-			min_span=1)
+			min_repeats=3,
+			min_span=6)
 
 		for motif in "A", "CA", "CAG", "CAGA", "CAGAT", "CAGATT", "CAGATTA", "CAGATTAG":
 			repeats = detect_repeats(6*motif, filter_settings)
@@ -39,4 +38,4 @@ class RepeatFinderTests(unittest.TestCase):
 		motif2 = "AAC"
 		filter_settings.min_motif_size = 2
 		repeats = detect_repeats(7*motif1 + 10*motif2, filter_settings)
-		self.assertEqual(repeats, [(0, 7, "AA"), (5, 17, "AAC")])
+		self.assertEqual(repeats, [(0, 9, "AA"), (7, 37, "AAC")])
