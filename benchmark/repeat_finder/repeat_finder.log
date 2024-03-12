@@ -1,0 +1,12 @@
+++ gunzip -c ../chr22.fa.gz
+++ python3 ../../repeat_finder.py --min-motif-size 1 --max-motif-size 6 --min-repeats 3 --min-span 9 -o chr22_repeats chr22.fa
+Processing chr22 (50,818,468 bp)
+Found 67,665 repeats
+
+real	4m8.721s
+user	4m7.347s
+sys	0m1.721s
+++ rm chr22.fa
+++ set +x
+output:
+67665 chr22_repeats.bed
