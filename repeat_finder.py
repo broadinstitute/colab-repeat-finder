@@ -216,8 +216,61 @@ def main():
 
     args = parser.parse_args()
 
-    if args.max_interruptions != "0":
-        parser.error("--max-interruptions values > 0 are not yet supported.")
+    if args.min_motif_size < 1:
+        parser.error(f"--min-motif-size is set to {args.min_motif_size}. It must be at least 1.")
+    if args.max_motif_size < args.min_motif_size:
+        parser.error(f"--max-motif-size is set to {args.max_motif_size}. It must be at least --min-motif-size.")
+    if args.min_repeats < 1:
+        parser.error(f"--min-repeats is set to {args.min_repeats}. It must be at least 1.")
+    if args.min_span < 1:
+        parser.error(f"--min-span is set to {args.min_span}. It must be at least 1.")
+
+    args.max_interruptions_by_motif_size = {}
+    try:
+        max_interruptions = int(args.max_interruptions)
+        for motif_size in range(args.min_motif_size, args.max_motif_size + 1):
+            if motif_size < 3 or motif_size <= max_interruptions:
+                args.max_interruptions_by_motif_size[motif_size] = 0
+            else:
+                args.max_interruptions_by_motif_size[motif_size] = max_interruptions
+    except ValueError:
+        pass
+
+    if not args.max_interruptions_by_motif_size and os.path.isfile(args.max_interruptions):
+        for motif_size in range(args.min_motif_size, args.max_motif_size + 1):
+            args.max_interruptions_by_motif_size[motif_size] = 0
+
+        with (open(args.max_interruptions, "rt") as tsv_file):
+            header = tsv_file.readline().strip().split("\t")
+            if header != ["MotifSize", "MaxInterruptions"]:
+                parser.error(f"Invalid header in {args.max_interruptions}. Expected 2 columns named: 'MotifSize\tMaxInterruptions'")
+
+            for i, line in enumerate(tsv_file):
+                fields = line.strip().split("\t")
+                if len(fields) != 2:
+                    parser.error(f"Invalid line {i+1} in {args.max_interruptions}. Expected 2 tab-delimited columns.")
+
+                motif_size, max_interruptions = fields
+                try:
+                    motif_size = int(motif_size)
+                    max_interruptions = int(max_interruptions)
+                except ValueError:
+                    parser.error(f"Invalid value in {args.max_interruptions} line {i+1}: {motif_size}\t{max_interruptions}. Both values must be integers.")
+
+                if motif_size < 1:
+                    parser.error(f"Invalid motif size in {args.max_interruptions} line {i+1}: {motif_size}. It must be greater than 0.")
+                if motif_size < 3 and max_interruptions > 0:
+                    parser.error(f"Invalid setting in {args.max_interruptions} line {i+1}: Interruptions are not supported in motif sizes less than 3bp.")
+                if max_interruptions >= motif_size:
+                    parser.error(f"Invalid setting in {args.max_interruptions} line {i+1}: MaxInterruptions must be less than MotifSize.")
+
+                if motif_size >= args.min_motif_size and motif_size <= args.max_motif_size:
+                    args.max_interruptions_by_motif_size[motif_size] = max_interruptions
+
+    if not args.max_interruptions_by_motif_size:
+        parser.error(f"Invalid --max-interruptions value: {args.max_interruptions}. It must be an integer or a TSV file path.")
+
+    print(args.max_interruptions_by_motif_size)
 
     interval_sequence = None
     if os.path.isfile(args.input_sequence):
@@ -240,7 +293,7 @@ def main():
 
             interval_sequence = fasta_entries[interval_chrom][interval_start_0based:interval_end].seq
             fasta_entries = [
-                argparse.Namespace(name=args.interval, seq=interval_sequence)
+                argparse.Namespace(name=interval_chrom, seq=interval_sequence)
             ]
 
         with open(output_bed_path, "wt") as bed_file:
@@ -251,7 +304,11 @@ def main():
                 output_intervals = detect_repeats(seq, args, verbose=args.verbose)
                 print(f"Found {len(output_intervals):,d} repeats")
                 for start_0based, end, motif in output_intervals:
+                    if args.interval:
+                        start_0based += interval_start_0based
+                        end += interval_start_0based
                     bed_file.write("\t".join([chrom, str(start_0based), str(end), motif]) + "\n")
+        print(f"Wrote results to {output_bed_path}")
 
     elif set(args.input_sequence.upper()) <= set("ACGTN"):
         interval_sequence = args.input_sequence
@@ -267,6 +324,7 @@ def main():
             for start_0based, end, motif in output_intervals:
                 row = "\t".join([str(start_0based), str(end), motif]) + "\n"
                 tsv_file.write(row)
+        print(f"Wrote results to {output_tsv_path}")
     else:
         parser.error(f"Invalid input: {args.input_sequence}. This should be a FASTA file path or a string of nucleotides.")
 
