@@ -201,6 +201,12 @@ def main():
     group.add_argument("--min-repeats", default=3, type=int, help="The minimum number of repeats to look for.")
     group.add_argument("--min-span", default=9, type=int, help="The repeats should span at least this many consecutive "
                                                                "bases in the input sequence.")
+    group.add_argument("--max-interruptions", default="0", help="How many bases within a motif are allowed to vary "
+        "across repeats. For example, setting this to 1 would be equivalent to matching repeats with patterns like "
+        "(GCN)* or (AANAG)* or (ANAAG)*, where a single base can vary. If the value is an integer, it is applied to "
+        "all motif sizes greater than 2. If a config file path is provided instead, it should be a TSV table with "
+        "2 columns and the following header: 'MotifSize\tMaxInterruptions'. The values in the MotifSize columns should "
+        "be integers greater than 2, and the values in the MaxInterruptions column should be non-negative integers.")
     parser.add_argument("-i", "--interval", help="Only consider sequence from this interval (chrom:start_0based-end).")
     parser.add_argument("-p", "--plot", help="Write out a plot with this filename.")
     parser.add_argument("-o", "--output-prefix", help="The output filename prefix for the output TSV file. If the input "
@@ -209,6 +215,9 @@ def main():
     parser.add_argument("input_sequence", help="The nucleotide sequence, or a FASTA file path")
 
     args = parser.parse_args()
+
+    if args.max_interruptions != "0":
+        parser.error("--max-interruptions values > 0 are not yet supported.")
 
     interval_sequence = None
     if os.path.isfile(args.input_sequence):
