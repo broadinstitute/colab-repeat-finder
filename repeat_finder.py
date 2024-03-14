@@ -202,12 +202,14 @@ def get_period_matrix(min_motif_size, max_motif_size, query):
     return matrix
 
 
-def detect_repeats(input_sequence, filter_settings, verbose=False):
+def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress_bar=False):
     """Detect repeats in a given input sequence.
 
     Args:
         input_sequence (str): The input sequence.
         filter_settings (Namespace): Filter settings from command-line args.
+        verbose (bool): Print verbose output for debugging.
+        show_progress_bar (bool): Show a progress bar while traversing the input sequence.
 
     Return:
         list: A list of (start_0based, end, motif) tuples reprsenting all detected repeats in the input sequence.
@@ -238,10 +240,11 @@ def detect_repeats(input_sequence, filter_settings, verbose=False):
         )
         run_trackers[motif_size] = run_tracker
 
-    position_range = range(len(input_sequence))
-    if verbose:
+    progress_bar = None
+    if show_progress_bar:
         import tqdm
-        position_range = tqdm.tqdm(position_range, unit=" bp", unit_scale=True, total=len(input_sequence))
+        progress_bar = tqdm.tqdm(unit=" bp", unit_scale=True, total=len(input_sequence))
+        progress_bar.n = len(input_sequence)
 
     while run_trackers:
         run_trackers_that_are_done = []
@@ -251,6 +254,10 @@ def detect_repeats(input_sequence, filter_settings, verbose=False):
                 run_tracker.done()
                 run_trackers_that_are_done.append(motif_size)
                 print(f"Done with motif size {motif_size}bp")
+
+            if progress_bar:
+                progress_bar.n = run_tracker.current_position
+                progress_bar.refresh()
 
         for motif_size in run_trackers_that_are_done:
             del run_trackers[motif_size]
@@ -316,6 +323,7 @@ def main():
     parser.add_argument("-o", "--output-prefix", help="The output filename prefix for the output TSV file. If the input "
                                                       "is a FASTA file, a BED file will also be generated.")
     parser.add_argument("--verbose", action="store_true", help="Print verbose output.")
+    parser.add_argument("--show-progress-bar", action="store_true", help="Show progress bar.")
     parser.add_argument("input_sequence", help="The nucleotide sequence, or a FASTA file path")
 
     args = parser.parse_args()
@@ -407,7 +415,7 @@ def main():
                 seq = fasta_entry.seq
                 chrom = fasta_entry.name
                 print(f"Processing {chrom} ({len(seq):,d} bp)")
-                output_intervals = detect_repeats(seq, args, verbose=args.verbose)
+                output_intervals = detect_repeats(seq, args, verbose=args.verbose, show_progress_bar=args.show_progress_bar)
                 print(f"Found {len(output_intervals):,d} repeats")
                 for start_0based, end, motif in output_intervals:
                     if args.interval:
@@ -425,7 +433,7 @@ def main():
             args.output_prefix = "repeats"
         output_tsv_path = f"{args.output_prefix}.tsv"
 
-        output_intervals = detect_repeats(args.input_sequence, args)
+        output_intervals = detect_repeats(args.input_sequence, args, verbose=args.verbose, show_progress_bar=args.show_progress_bar)
         print(f"Found {len(output_intervals):,d} repeats")
 
         with open(output_tsv_path, "wt") as tsv_file:
