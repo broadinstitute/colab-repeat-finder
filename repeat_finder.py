@@ -91,7 +91,8 @@ class RepeatTracker:
             self.log(f"Adding position {self.current_position} to repeat run")
             return True
 
-        print(f"Position {self.current_position} ({seq[self.current_position]}) doesn't match position {self.current_position + self.motif_size} ({seq[self.current_position + self.motif_size]})")
+        if self.verbose:
+            print(f"Position {self.current_position} ({seq[self.current_position]}) doesn't match position {self.current_position + self.motif_size} ({seq[self.current_position + self.motif_size]})")
 
         if self.run_length > 0:
             if self.position_of_first_interruption is None:
@@ -105,7 +106,8 @@ class RepeatTracker:
                 self.current_interrupted_positions_in_motif.add(current_position_in_motif)
 
             if current_position_in_motif in self.current_interrupted_positions_in_motif:
-                print(f"Continuing to position {self.current_position + 1} despite interruption at position {current_position_in_motif}")
+                if self.verbose:
+                    print(f"Continuing to position {self.current_position + 1} despite interruption at position {current_position_in_motif}")
                 self.run_length += 1
                 self.current_position += 1
                 return True
@@ -168,7 +170,8 @@ class RepeatTracker:
         # start searching again from the position where the 1st interruption was detected
 
         if self.position_of_first_interruption is not None:
-            print(f"Jumping back from position {self.current_position} to position of first interruption "
+            if self.verbose:
+                print(f"Jumping back from position {self.current_position} to position of first interruption "
                   f"({self.position_of_first_interruption - 1})")
             self.current_position = self.position_of_first_interruption
             self.position_of_first_interruption = None
@@ -231,7 +234,7 @@ def detect_repeats(input_sequence, filter_settings, verbose=False):
             max_interruptions=filter_settings.max_interruptions_by_motif_size.get(motif_size, 0),
             input_sequence=input_sequence,
             output_intervals=output_intervals,
-            verbose=True,
+            verbose=filter_settings.verbose,
         )
         run_trackers[motif_size] = run_tracker
 
@@ -371,7 +374,9 @@ def main():
     if not args.max_interruptions_by_motif_size:
         parser.error(f"Invalid --max-interruptions value: {args.max_interruptions}. It must be an integer or a TSV file path.")
 
-    print(args.max_interruptions_by_motif_size)
+    if args.verbose:
+        for motif_size, max_interruptions in args.max_interruptions_by_motif_size.items():
+            print(f"interruptions limit = {max_interruptions} per repeat for {motif_size}bp motifs")
 
     interval_sequence = None
     if os.path.isfile(args.input_sequence):
