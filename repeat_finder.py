@@ -9,9 +9,12 @@ import re
 
 class RepeatTracker:
     """This class tracks repeats of a single motif size in a given input sequence. It outputs all perfect repeats of
-    this that pass filter criteria while scanning the input sequence from left to right"""
+    this motif size that pass filter criteria while scanning the input sequence from left to right.
+    If the max_interruptions parameter is > 0 then it will also look for interrupted repeats where a fixed number of
+    positions within the motif can vary across repeats. In this mode, the algorithm traverses left to right, but
+    may occasionally jump backward to revisit some previously-evaluated positions."""
 
-    def __init__(self, motif_size, min_repeats, min_span, max_interruptions, input_sequence, output_intervals, verbose=False):
+    def __init__(self, motif_size, min_repeats, min_span, max_interruptions, input_sequence, output_intervals, verbose=False, debug=False):
         """Initialize a RepeatTracker object.
 
         Args:
@@ -41,6 +44,9 @@ class RepeatTracker:
 
         self.previous_output_interval = None  # 3-tuple (start_0based, end, motif) of the most recent interval added to output_intervals
 
+        # a list of strings for debugging. Each entry represents traversal paths through the input sequence, starting with a
+        # position integer, followed by 1 or more nucleotides, ending at the end of a repeat interval or at the end of the input sequence
+        self.debug_strings = ["0 - "] if debug else None
 
     def log(self, message):
         """Print a message if verbose output is enabled."""
@@ -85,10 +91,13 @@ class RepeatTracker:
             self.log(f"advance() reached end of sequence")
             return False
 
+        if self.debug_strings:
+            self.debug_strings[-1] += seq[self.current_position]
+
         if seq[self.current_position] == seq[self.current_position + self.motif_size]:
+            self.log(f"Adding position {self.current_position} to repeat run")
             self.run_length += 1
             self.current_position += 1
-            self.log(f"Adding position {self.current_position} to repeat run")
             return True
 
         if self.verbose:
@@ -102,7 +111,7 @@ class RepeatTracker:
 
             current_position_in_motif = self.run_length % self.motif_size
             if len(self.current_interrupted_positions_in_motif) < self.max_interruptions:
-                self.log(f"Allow base #{current_position_in_motif + 1} within the motif to vary across repeats.")
+                self.log(f"Allowing base #{current_position_in_motif + 1} within the motif to vary across repeats.")
                 self.current_interrupted_positions_in_motif.add(current_position_in_motif)
 
             if current_position_in_motif in self.current_interrupted_positions_in_motif:
@@ -112,8 +121,7 @@ class RepeatTracker:
                 self.current_position += 1
                 return True
 
-        if self.run_length > 0:
-            self.output_interval_if_it_passes_filters()
+        self.output_interval_if_it_passes_filters()
 
         self.run_length = 0
         self.current_position += 1
@@ -123,10 +131,16 @@ class RepeatTracker:
         """Output the last interval if it passes filters"""
         self.output_interval_if_it_passes_filters()
 
+        if self.debug_strings:
+            self.print_debug_strings()
+
     def output_interval_if_it_passes_filters(self):
         """Check internal state to see if enough repeats have accumulated to output an interval. If yes, add it to
         the output. self.current_position will be the 0-based position in the input sequence where the interval ends.
         """
+        if self.run_length + self.motif_size < self.min_span or self.run_length + self.motif_size < self.min_repeats * self.motif_size:
+            return
+
         self.log(f"Checking whether to output current repeat run")
         seq = self.input_sequence
 
@@ -135,12 +149,13 @@ class RepeatTracker:
         if "N" in motif:
             return
 
-        if self.run_length + self.motif_size >= self.min_span and self.run_length + self.motif_size >= self.min_repeats * self.motif_size:
-            # extend the interval to the right up to self.motif_size - 1 bases
-            while self.current_position < len(seq) and (seq[self.current_position] == seq[self.current_position - self.motif_size] or (self.run_length % self.motif_size) in self.current_interrupted_positions_in_motif):
-                self.run_length += 1
-                self.current_position += 1
-                self.log(f"Extend {motif} repeat to {start_0based}-{self.current_position}: {seq[start_0based:self.current_position]}")
+        # extend the interval to the right, up to self.motif_size - 1 bases
+        while self.current_position < len(seq) and (seq[self.current_position] == seq[self.current_position - self.motif_size] or (self.run_length % self.motif_size) in self.current_interrupted_positions_in_motif):
+            self.run_length += 1
+            self.current_position += 1
+            if self.debug_strings and self.current_position < len(seq):
+                self.debug_strings[-1] += seq[self.current_position]
+            self.log(f"Extend {motif} repeat to {start_0based}-{self.current_position}: {seq[start_0based:self.current_position]}")
 
         if self.run_length >= self.min_span and self.run_length >= self.min_repeats * self.motif_size:
             end = self.current_position
@@ -173,12 +188,25 @@ class RepeatTracker:
             if self.verbose:
                 print(f"Jumping back from position {self.current_position} to position of first interruption "
                   f"({self.position_of_first_interruption - 1})")
+
+            if self.debug_strings:
+                self.debug_strings.append(f"{self.position_of_first_interruption} - ")
+
             self.current_position = self.position_of_first_interruption
             self.position_of_first_interruption = None
 
         self.run_length = 0
 
         self.current_interrupted_positions_in_motif.clear()
+
+    def print_debug_strings(self):
+        """Print debug strings for debugging."""
+        if self.debug_strings:
+            print("=======")
+            print(f"Debug strings for {self.motif_size}bp motif:")
+            for i, s in enumerate(self.debug_strings):
+                print("  "*i, s)
+
 
 def shift_string_by(string, shift):
     """Shift a string to the right by a given number of characters (eg. "AGTTT" shifted by 2 becomes "TTAGT")."""
@@ -202,7 +230,7 @@ def get_period_matrix(min_motif_size, max_motif_size, query):
     return matrix
 
 
-def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress_bar=False):
+def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress_bar=False, debug=False):
     """Detect repeats in a given input sequence.
 
     Args:
@@ -210,6 +238,7 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
         filter_settings (Namespace): Filter settings from command-line args.
         verbose (bool): Print verbose output for debugging.
         show_progress_bar (bool): Show a progress bar while traversing the input sequence.
+        debug (bool): Print debug output.
 
     Return:
         list: A list of (start_0based, end, motif) tuples reprsenting all detected repeats in the input sequence.
@@ -237,6 +266,7 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
             input_sequence=input_sequence,
             output_intervals=output_intervals,
             verbose=filter_settings.verbose,
+            debug=debug,
         )
         run_trackers[motif_size] = run_tracker
 
@@ -253,7 +283,7 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
             if not advanced:
                 run_tracker.done()
                 run_trackers_that_are_done.append(motif_size)
-                print(f"Done with motif size {motif_size}bp")
+                if verbose: print(f"Done with motif size {motif_size}bp")
 
             if progress_bar:
                 progress_bar.n = run_tracker.current_position
@@ -318,6 +348,14 @@ def main():
         "all motif sizes greater than 2. If a config file path is provided instead, it should be a TSV table with "
         "2 columns and the following header: 'MotifSize\tMaxInterruptions'. The values in the MotifSize columns should "
         "be integers greater than 2, and the values in the MaxInterruptions column should be non-negative integers.")
+
+    group.add_argument("--allow-multibase-homopolymer-motifs", action="store_true", help="When --min-motif-size is "
+        "greater than 1, allow motifs like 'AA' or 'TTTT'. By default, they are discarded. Similarly, when interruptions "
+        "are enabled, allow repeats like (ANAAA)* where all bases are either a homopolymer or can vary across repeats.")
+    group.add_argument("--allow-ending-with-different-motif", action="store_true", help="By default, interrupted "
+        "repeats must still end with at least 1 copy of the exact same motif that they started with. This option "
+        "disables that rule.")
+
     parser.add_argument("-i", "--interval", help="Only consider sequence from this interval (chrom:start_0based-end).")
     parser.add_argument("-p", "--plot", help="Write out a plot with this filename.")
     parser.add_argument("-o", "--output-prefix", help="The output filename prefix for the output TSV file. If the input "
