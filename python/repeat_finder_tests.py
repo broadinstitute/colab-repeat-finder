@@ -1,6 +1,7 @@
 import argparse
 import unittest
-from repeat_finder import shift_string_by, detect_repeats
+from repeat_finder import detect_repeats
+from utils.plot_utils import shift_string_by
 
 
 class RepeatFinderTests(unittest.TestCase):
