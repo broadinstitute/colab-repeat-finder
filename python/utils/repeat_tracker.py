@@ -7,7 +7,11 @@ class RepeatTracker:
 	this motif size that pass filter criteria while scanning the input sequence from left to right.
 	If the max_interruptions parameter is > 0 then it will also look for interrupted repeats where a fixed number of
 	positions within the motif can vary across repeats. In this mode, the algorithm traverses left to right, but
-	may occasionally jump backward to revisit some previously-evaluated positions."""
+	may occasionally jump backward to revisit some previously-evaluated positions.
+	Also, when --min-motif-size is greater than 1, repeats with motifs like 'AA' or 'TTTT' are discarded. Similarly,
+	when interruptions are enabled, repeats like (ANAAA)* (where all bases are either a homopolymer or can vary
+	across repeats) are also discarded.
+	"""
 
 	def __init__(self,
 				 motif_size,
@@ -16,8 +20,6 @@ class RepeatTracker:
 				 max_interruptions,
 				 input_sequence,
 				 output_intervals,
-				 allow_multibase_homopolymer_motifs=False,
-				 allow_ending_with_different_motif=False,
 				 verbose=False,
 				 debug=False):
 		"""Initialize a RepeatTracker object.
@@ -27,8 +29,6 @@ class RepeatTracker:
 			min_repeats (int): Only add repeats to the output when there's at least this many repeats in a row.
 			min_span (int):  Only add repeats to the output when they span at least this many base pairs.
 			max_interruptions (int): How many bases within a motif are allowed to vary across repeats.
-			allow_multibase_homopolymer_motifs (bool): When the motif size is greater than 1, allow motifs like 'AA' or 'TTTT'.
-			allow_ending_with_different_motif (bool): By default, interrupted repeats must still end with at least 1 copy of the exact same motif that they started with.
 			input_sequence (str): The input sequence.
 			output_intervals (dict): A dictionary to store detected repeats. The key is (start_0based, end) and the
 				value is the detected motif.
@@ -39,8 +39,6 @@ class RepeatTracker:
 		self.min_repeats = min_repeats
 		self.min_span = min_span
 		self.max_interruptions = max_interruptions
-		self.allow_multibase_homopolymer_motifs = allow_multibase_homopolymer_motifs
-		self.allow_ending_with_different_motif = allow_ending_with_different_motif
 		self.input_sequence = input_sequence
 		self.output_intervals = output_intervals
 		self.verbose = verbose
@@ -164,7 +162,7 @@ class RepeatTracker:
 		# extend the interval to the right, up to self.motif_size - 1 bases
 		while self.current_position < len(seq) and (
 			seq[self.current_position] == seq[self.current_position - self.motif_size]
-			or (self.allow_ending_with_different_motif and (self.run_length % self.motif_size) in self.current_interrupted_positions_in_motif)
+			or (self.run_length % self.motif_size) in self.current_interrupted_positions_in_motif
 		):
 			if self.debug_strings:
 				self.debug_strings[-1] += seq[self.current_position]
@@ -176,14 +174,14 @@ class RepeatTracker:
 			self.reset_traversal()
 			return
 
-		if not self.allow_ending_with_different_motif:
-			# search backward for an exact copy of the first repeat (ie. without any interruptions)
-			while (self.run_length >= self.min_span) and (self.run_length >= self.min_repeats * self.motif_size) and (
-				shift_string_by(seq[self.current_position - self.motif_size:self.current_position], self.run_length % self.motif_size) != motif
-			):
-				self.log(f"Moving back 1 because {motif} != {shift_string_by(seq[self.current_position - self.motif_size:self.current_position], self.run_length % self.motif_size)}")
-				self.current_position -= 1
-				self.run_length -= 1
+		#if not self.allow_ending_with_different_motif:
+		#	# search backward for an exact copy of the first repeat (ie. without any interruptions)
+		#	while (self.run_length >= self.min_span) and (self.run_length >= self.min_repeats * self.motif_size) and (
+		#		shift_string_by(seq[self.current_position - self.motif_size:self.current_position], self.run_length % self.motif_size) != motif
+		#	):
+		#		self.log(f"Moving back 1 because {motif} != {shift_string_by(seq[self.current_position - self.motif_size:self.current_position], self.run_length % self.motif_size)}")
+		#		self.current_position -= 1
+		#		self.run_length -= 1
 
 		if self.run_length < self.min_span or self.run_length < self.min_repeats * self.motif_size:
 			if self.verbose: print(f"==> No, this run doesn't span enough bases or have enough repeats of a {self.motif_size} bp motif.")
@@ -211,7 +209,7 @@ class RepeatTracker:
 			final_motif = final_motif[:k] + "N" + final_motif[k+1:]
 
 		final_motif_bases = {b for b in final_motif if b != "N"}
-		if self.motif_size > 1 and len(final_motif_bases) == 1 and not self.allow_multibase_homopolymer_motifs:
+		if self.motif_size > 1 and len(final_motif_bases) == 1:
 			if self.verbose: print(f"==> No, the motif is equivalent to a homopolymer: {final_motif}.")
 			self.reset_traversal()
 			return

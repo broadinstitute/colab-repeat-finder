@@ -52,8 +52,6 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
                 min_repeats=filter_settings.min_repeats,
                 min_span=filter_settings.min_span,
                 max_interruptions=max_interruptions,
-                allow_multibase_homopolymer_motifs=filter_settings.allow_multibase_homopolymer_motifs,
-                allow_ending_with_different_motif=filter_settings.allow_ending_with_different_motif,
                 input_sequence=input_sequence,
                 output_intervals=output_intervals,
                 verbose=filter_settings.verbose,
@@ -126,13 +124,6 @@ def main():
         "all motif sizes greater than 2. If a config file path is provided instead, it should be a TSV table with "
         "2 columns and the following header: 'MotifSize\tMaxInterruptions'. The values in the MotifSize columns should "
         "be integers greater than 2, and the values in the MaxInterruptions column should be non-negative integers.")
-
-    group.add_argument("--allow-multibase-homopolymer-motifs", action="store_true", help="When --min-motif-size is "
-        "greater than 1, allow motifs like 'AA' or 'TTTT'. By default, they are discarded. Similarly, when interruptions "
-        "are enabled, allow repeats like (ANAAA)* where all bases are either a homopolymer or can vary across repeats.")
-    group.add_argument("--allow-ending-with-different-motif", action="store_true", help="By default, interrupted "
-        "repeats must still end with at least 1 copy of the exact same motif that they started with. This option "
-        "disables that rule.")
 
     parser.add_argument("-i", "--interval", help="Only consider sequence from this interval (chrom:start_0based-end).")
     parser.add_argument("-p", "--plot", help="Write out a plot with this filename.")

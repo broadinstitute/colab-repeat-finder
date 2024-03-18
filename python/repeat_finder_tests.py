@@ -22,8 +22,6 @@ class RepeatFinderTests(unittest.TestCase):
 			min_repeats=3,
 			max_interruptions_by_motif_size={i: 0 for i in range(1, 8)},
 			min_span=6,
-			allow_multibase_homopolymer_motifs=False,
-			allow_ending_with_different_motif=False,
 			verbose=False,
 			debug=False)
 
