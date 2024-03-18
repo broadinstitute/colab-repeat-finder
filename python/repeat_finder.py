@@ -97,7 +97,7 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
                 if not advanced_to_next_position:
                     repeat_tracker.done()
                     repeat_trackers_that_are_done.append(motif_size)
-                    print(f"Done with motif size {motif_size}bp")
+                    if verbose: print(f"Done with motif size {motif_size}bp")
 
                 if progress_bar:
                     while progress_bar_position < repeat_tracker.current_position:
@@ -240,19 +240,21 @@ def main():
             parser.error("The --interval option is only supported for FASTA files.")
 
         interval_sequence = args.input_sequence
-        if not args.output_prefix:
-            args.output_prefix = "repeats"
-        output_tsv_path = f"{args.output_prefix}.tsv"
 
         output_intervals = detect_repeats(args.input_sequence, args, verbose=args.verbose, show_progress_bar=args.show_progress_bar)
-        print(f"Found {len(output_intervals):,d} repeats")
+        print(f"Found {len(output_intervals):,d} repeat(s):")
+        for start_0based, end, motif in output_intervals:
+            print(f"{start_0based}-{end} = {motif} x {(end - start_0based)/len(motif):0.1f}")
 
-        with open(output_tsv_path, "wt") as tsv_file:
-            tsv_file.write("\t".join(["start_0based", "end", "motif"]) + "\n")
-            for start_0based, end, motif in output_intervals:
-                row = "\t".join([str(start_0based), str(end), motif]) + "\n"
-                tsv_file.write(row)
-        print(f"Wrote results to {output_tsv_path}")
+        if args.output_prefix:
+            output_tsv_path = f"{args.output_prefix}.tsv"
+            with open(output_tsv_path, "wt") as tsv_file:
+                tsv_file.write("\t".join(["start_0based", "end", "motif"]) + "\n")
+                for start_0based, end, motif in output_intervals:
+                    row = "\t".join([str(start_0based), str(end), motif]) + "\n"
+                    tsv_file.write(row)
+            print(f"Wrote results to {output_tsv_path}")
+
     else:
         parser.error(f"Invalid input: {args.input_sequence}. This should be a FASTA file path or a string of nucleotides.")
 
