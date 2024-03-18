@@ -1,35 +1,18 @@
 import argparse
 import pyfastx
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
-import numpy as np
 import os
 import re
 import tqdm
 
 from utils.pure_repeat_tracker import PureRepeatTracker
 from utils.repeat_tracker import RepeatTracker
+from utils.plot_utils import plot_results
 
-def shift_string_by(string, shift):
-    """Shift a string to the right by a given number of characters (eg. "AGTTT" shifted by 2 becomes "TTAGT")."""
+# campture Ctrl-C and print a newline
+#repeat_trackers = None
 
-    return string[-shift:] + string[:-shift]
-
-
-def get_period_matrix(min_motif_size, max_motif_size, query):
-    min_motif_size = max(min_motif_size, 1)
-    max_motif_size = min(max_motif_size, len(query) // 2)
-    matrix = [[0 for _ in range(len(query))] for _ in range(max_motif_size)]
-    
-    for row in range(min_motif_size - 1, max_motif_size):
-        period = row + 1
-        for column in range(len(query) - period):
-            if query[column] == query[column + period]:
-                # set the matrix value to a hash that stays the same as long as the motif is the same
-                value = abs(hash(shift_string_by(query[column:column + period], column % period)))
-                matrix[row][column] = value
-
-    return matrix
+#import signal
+#signal.signal(signal.SIGINT, lambda x, y: all(r.log(f"Ctrl-C: motif size = {r.motif_size}bp {r.current_position:,d}", force=True) for r in repeat_trackers.values()))
 
 
 def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress_bar=False, debug=False):
@@ -56,6 +39,7 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
 
     input_sequence = input_sequence.upper()
 
+    #global repeat_trackers
     # generate all intervals
     output_intervals = {}
     repeat_trackers = {}
@@ -86,6 +70,8 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
         repeat_trackers[motif_size] = repeat_tracker
 
     if all(max_interruptions == 0 for max_interruptions in filter_settings.max_interruptions_by_motif_size.values()):
+        # if all repeats must be pure, the repeat trackers can just advance linearly through the sequence
+        print("Running pure repeat trackers for motifs", list(repeat_trackers.keys()))
         if show_progress_bar:
             input_sequence = tqdm.tqdm(input_sequence, unit=" bp", unit_scale=True, total=len(input_sequence))
 
@@ -93,7 +79,14 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
         for _ in input_sequence:
             for repeat_tracker in repeat_trackers:
                 repeat_tracker.advance()
+
+        for repeat_tracker in repeat_trackers:
+            assert not repeat_tracker.advance(), f"{repeat_tracker.motif_size}bp motif RepeatTracker did not reach end of the sequence"
+
+            repeat_tracker.done()
     else:
+        # if interruptions are allowed for at least some motifs, some repeat trackers may need to jump backwards
+        # before proceeding fowards again through the sequence, so the iteration must deal with this
         progress_bar = None
         if show_progress_bar:
             progress_bar = iter(tqdm.tqdm(range(0, len(input_sequence)), unit=" bp", unit_scale=True, total=len(input_sequence)))
@@ -106,7 +99,7 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
                 if not advanced_to_next_position:
                     repeat_tracker.done()
                     repeat_trackers_that_are_done.append(motif_size)
-                    if verbose: print(f"Done with motif size {motif_size}bp")
+                    print(f"Done with motif size {motif_size}bp")
 
                 if progress_bar:
                     while progress_bar_position < repeat_tracker.current_position:
@@ -117,45 +110,6 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
                 del repeat_trackers[motif_size]
 
     return [(start_0based, end, motif) for (start_0based, end), motif in sorted(output_intervals.items())]
-
-
-def plot_results(input_sequence, output_intervals, max_motif_size, output_path):
-    """Plot the repeats detected in the given input sequence. This code was copied from
-    https://colab.research.google.com/drive/1wa_96-zPbsJpQpEyVnQMJ2bwMtYZ5Mq8#scrollTo=36bfbda3
-
-    Args:
-        input_sequence (str): The input sequence.
-        output_intervals (list): A list of (start_0based, end, motif) tuples representing all repeats detected in the input sequence.
-        max_motif_size (int): The maximum motif size in base pairs.
-        output_path (str): The output image filename for the plot.
-
-    """
-
-    plt.rcParams['figure.figsize'] = [16.5, 5]
-    plt.rcParams['font.size'] = 12
-
-    matrix = [[0 for _ in range(len(input_sequence))] for _ in range(max_motif_size)]
-    for start_0based, end, motif in output_intervals:
-        row = len(motif) - 1
-        for i in range(start_0based, end + 1):
-            matrix[row][i] = abs(hash(motif)) % 10 + 1
-
-    fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(10, 8))
-    cmap = ListedColormap(['#F3F3F3'] + list(plt.get_cmap("Pastel2", 12).colors))
-    ax1.set_xticks(range(0, len(input_sequence)), minor=True)
-    ax1.matshow(matrix, aspect="auto", cmap=cmap)
-    ax1.set_xlabel("Query position")
-    ax1.set_ylabel("Period")
-
-    scores = [sum([1 for _ in row if _ > 0]) for row in matrix]
-    periods = list(range(len(scores)))
-    scores = [scores[i]/(len(input_sequence) - periods[i] + 1) for i in range(len(scores))]
-    ax2.bar(periods, scores)
-    ax2.set_ylabel("Fraction of matches")
-    ax2.set_xlabel("Period");
-
-    plt.savefig(output_path)
-    print(f"Wrote {output_path}")
 
 
 def main():
@@ -251,6 +205,7 @@ def main():
 
     interval_sequence = None
     if os.path.isfile(args.input_sequence):
+        # process FASTA input file
         if not args.output_prefix:
             args.output_prefix = re.sub(".fa(sta)?(.gz)?", "", args.input_sequence)
 
@@ -288,6 +243,8 @@ def main():
         print(f"Wrote results to {output_bed_path}")
 
     elif set(args.input_sequence.upper()) <= set("ACGTN"):
+        # process nucleotide sequence specified on the command line
+
         if args.interval:
             parser.error("The --interval option is only supported for FASTA files.")
 
@@ -312,6 +269,7 @@ def main():
         if len(interval_sequence) > 5_000:
             print(f"Warning: The input sequence is too long ({len(sequence_to_plot):,d} bp). Skipping plot...")
         else:
+            print(f"Generating plot {args.plot}")
             plot_results(interval_sequence, output_intervals, args.max_motif_size, args.plot)
 
 

@@ -1,4 +1,6 @@
 """RepeatTracker class for detecting both pure and interrupted repeats of a given motif size in a sequence."""
+from utils.plot_utils import shift_string_by
+
 
 class RepeatTracker:
 	"""This class tracks repeats of a single motif size in a given input sequence. It outputs all perfect repeats of
@@ -55,19 +57,19 @@ class RepeatTracker:
 		# position integer, followed by 1 or more nucleotides, ending at the end of a repeat interval or at the end of the input sequence
 		self.debug_strings = ["0 - "] if debug else None
 
-	def log(self, message):
+	def log(self, message, force=False):
 		"""Print a message if verbose output is enabled."""
-		if not self.verbose:
+		if not force and not self.verbose:
 			return
 
 		start_0based = max(0, self.current_position - self.run_length)
 		motif = self.input_sequence[start_0based : start_0based + self.motif_size]
-		print(f"{message:100s}  || "
+		print(f"{message:100s}  || RepeatTracker: "
 			  f"{len(self.input_sequence):,d}bp  [{start_0based}:{self.current_position+1}], "
 			  f"run={self.run_length}, "
 			  f"i0={self.current_position}: "
 			  f"{(self.current_position - start_0based)/len(motif):0.2f} x {motif} "
-			  f"==> {self.input_sequence[start_0based : self.current_position+1]}")
+			  f"==> {self.input_sequence[start_0based : self.current_position+1] if self.current_position - start_0based < 300 else '[too long]'}")
 
 	def advance(self):
 		"""Increment current position within the input sequence while updating internal state and
@@ -87,10 +89,11 @@ class RepeatTracker:
 		Interrupted repeats:
 
 		For interrupted repeats, the algorithm is the same as above. However, when it encounters an interruption, it
-		saves the currrent position within the motif.
-			   |
-		AACAACAGCAACAACAACAAC
-
+		bookmarks the last position in the sequence before the interruption, advances past the interruption(s) as
+		long as they continue to satisfy filter criteria for the maximum allowed number of interrupted
+		(aka. variable) positions within the motif. When it reaches a position that doesn't pass these filters,
+		it evaluates the accumulated repeat run for whether it should be included in the output given all filtering
+		criteria, and then jumps to the bookmarked position to resume traversal from there.
 		"""
 
 		seq = self.input_sequence
@@ -154,12 +157,14 @@ class RepeatTracker:
 		start_0based = self.current_position - self.run_length
 		motif = seq[start_0based : start_0based + self.motif_size]
 		if "N" in motif:
+			# current repeat run did not pass filters, so reset
+			self.reset_traversal()
 			return
 
 		# extend the interval to the right, up to self.motif_size - 1 bases
 		while self.current_position < len(seq) and (
 			seq[self.current_position] == seq[self.current_position - self.motif_size]
-			or (self.run_length % self.motif_size) in self.current_interrupted_positions_in_motif
+			or (self.allow_ending_with_different_motif and (self.run_length % self.motif_size) in self.current_interrupted_positions_in_motif)
 		):
 			if self.debug_strings:
 				self.debug_strings[-1] += seq[self.current_position]
@@ -167,34 +172,59 @@ class RepeatTracker:
 			self.current_position += 1
 			self.log(f"Extend {motif} repeat to {start_0based}-{self.current_position}: {seq[start_0based:self.current_position]}")
 
-		if self.run_length >= self.min_span and self.run_length >= self.min_repeats * self.motif_size:
-			end = self.current_position
+		if self.run_length < self.min_span or self.run_length < self.min_repeats * self.motif_size:
+			self.reset_traversal()
+			return
 
-			motif_previously_detected_at_this_interval = self.output_intervals.get((start_0based, end))
-			if (
-				# if another motif size has already been record for this exact interval by another RepeatTracker,
-				# keep the short motif (eg. replace AAGAAG with AAG)
-				motif_previously_detected_at_this_interval is None or len(motif) < len(motif_previously_detected_at_this_interval)
-			) and (
-				# only output overlapping intervals if they extend beyond the previously added interval by at least one
-				# repeat unit. This becomes important when allowing interruptions.
-				self.previous_output_interval is None or end - self.previous_output_interval[1] >= self.motif_size
+		if not self.allow_ending_with_different_motif:
+			# search backward for an exact copy of the first repeat (ie. without any interruptions)
+			while (self.run_length >= self.min_span) and (self.run_length >= self.min_repeats * self.motif_size) and (
+				shift_string_by(seq[self.current_position - self.motif_size:self.current_position], self.run_length % self.motif_size) != motif
 			):
-				final_motif = motif
-				for k in self.current_interrupted_positions_in_motif:
-					final_motif = final_motif[:k] + "N" + final_motif[k+1:]
-				final_motif_bases = {b for b in final_motif if b != "N"}
-				if self.motif_size > 1 and len(final_motif_bases) == 1 and not self.allow_multibase_homopolymer_motifs:
-					if self.verbose: print(f"==> No, the motif is equivalent to a homopolymer: {final_motif}.")
-					return
+				self.log(f"Moving back 1 because {motif} != {shift_string_by(seq[self.current_position - self.motif_size:self.current_position], self.run_length % self.motif_size)}")
+				self.current_position -= 1
+				self.run_length -= 1
 
-				if self.verbose: print(f"==> Yes! Adding repeat run to output.")
-				self.output_intervals[(start_0based, end)] = final_motif
-				self.previous_output_interval = (start_0based, end, final_motif)
-			else:
-				if self.verbose: print(f"==> No, this interval signicantly overlaps another, previously detected repeat sequence.")
-		else:
+		if self.run_length < self.min_span or self.run_length < self.min_repeats * self.motif_size:
 			if self.verbose: print(f"==> No, this run doesn't span enough bases or have enough repeats of a {self.motif_size} bp motif.")
+			self.reset_traversal()
+			return
+
+		end = self.current_position
+		motif_previously_detected_at_this_interval = self.output_intervals.get((start_0based, end))
+		if (
+			# if another motif size has already been record for this exact interval by another RepeatTracker,
+			# keep the short motif (eg. replace AAGAAG with AAG)
+			motif_previously_detected_at_this_interval is not None and len(motif) >= len(motif_previously_detected_at_this_interval)
+		) or (
+			# only output overlapping intervals if they extend beyond the previously added interval by at least one
+			# repeat unit. This becomes important when allowing interruptions.
+			self.previous_output_interval is not None and end - self.previous_output_interval[1] < self.motif_size
+		):
+			if self.verbose: print(f"==> No, this interval signicantly overlaps another, previously detected repeat sequence.")
+			self.reset_traversal()
+			return
+
+
+		final_motif = motif
+		for k in self.current_interrupted_positions_in_motif:
+			final_motif = final_motif[:k] + "N" + final_motif[k+1:]
+
+		final_motif_bases = {b for b in final_motif if b != "N"}
+		if self.motif_size > 1 and len(final_motif_bases) == 1 and not self.allow_multibase_homopolymer_motifs:
+			if self.verbose: print(f"==> No, the motif is equivalent to a homopolymer: {final_motif}.")
+			self.reset_traversal()
+			return
+
+		if self.verbose: print(f"==> Yes! Adding repeat run to output.")
+		self.output_intervals[(start_0based, end)] = final_motif
+		self.previous_output_interval = (start_0based, end, final_motif)
+
+
+		self.reset_traversal()
+
+	def reset_traversal(self):
+		"""Called by output_interval_if_it_passes_filters() after it's done deciding whether to output the current repeat run"""
 
 		# start searching again from the position where the 1st interruption was detected
 		if self.position_of_first_interruption is not None:
@@ -209,7 +239,6 @@ class RepeatTracker:
 			self.position_of_first_interruption = None
 
 		self.run_length = 0
-
 		self.current_interrupted_positions_in_motif.clear()
 
 	def print_debug_strings(self):

@@ -4,7 +4,7 @@ class PureRepeatTracker:
 	"""This class tracks repeats of a single motif size in a given input sequence. It outputs all perfect repeats of
 	this that pass filter criteria while scanning the input sequence from left to right"""
 
-	def __init__(self, motif_size, min_repeats, min_span, input_sequence, output_intervals):
+	def __init__(self, motif_size, min_repeats, min_span, input_sequence, output_intervals, verbose=False):
 		"""Initialize a RepeatTracker object.
 
 		Args:
@@ -14,6 +14,7 @@ class PureRepeatTracker:
 			input_sequence (str): The input sequence.
 			output_intervals (dict): A dictionary to store detected repeats. The key is (start_0based, end) and the
 				value is the detected motif.
+			verbose (bool): If True, print debug information to the console.
 		"""
 
 		self.motif_size = motif_size
@@ -21,9 +22,23 @@ class PureRepeatTracker:
 		self.min_span = min_span
 		self.input_sequence = input_sequence
 		self.output_intervals = output_intervals
+		self.verbose = verbose
 
 		self.current_position = 0
 		self.run_length = 1
+
+	def log(self, message, force=False):
+		if not force and not self.verbose:
+			return
+
+		start_0based = max(0, self.current_position - self.run_length)
+		motif = self.input_sequence[start_0based : start_0based + self.motif_size]
+		print(f"{message:100s}  || PureRepeatTracker:"
+			  f"{len(self.input_sequence):,d}bp  [{start_0based}:{self.current_position+1}], "
+			  f"run={self.run_length}, "
+			  f"i0={self.current_position}: "
+			  f"{(self.current_position - start_0based)/len(motif):0.2f} x {motif} "
+			  f"==> {self.input_sequence[start_0based : self.current_position+1] if self.current_position - start_0based < 300 else '[too long]'}")
 
 	def advance(self):
 		"""Increment current position within the input sequence while updating internal state and recording any detected repeats"""
