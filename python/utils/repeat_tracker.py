@@ -43,8 +43,8 @@ class RepeatTracker:
 		self.output_intervals = output_intervals
 		self.verbose = verbose
 
-		self.current_position = 0   # 0-based position in the input sequence
-		self.run_length = 0
+		self._current_position = 0   # 0-based position in the input sequence
+		self._run_length = 0  # number of bases added so far to the current repeat interval
 
 		self.current_interrupted_positions_in_motif = set()
 		self.position_of_first_interruption = None
@@ -60,14 +60,14 @@ class RepeatTracker:
 		if not force and not self.verbose:
 			return
 
-		start_0based = max(0, self.current_position - self.run_length)
+		start_0based = max(0, self._current_position - self._run_length)
 		motif = self.input_sequence[start_0based : start_0based + self.motif_size]
 		print(f"{message:100s}  || RepeatTracker: "
-			  f"{len(self.input_sequence):,d}bp  [{start_0based}:{self.current_position+1}], "
-			  f"run={self.run_length}, "
-			  f"i0={self.current_position}: "
-			  f"{(self.current_position - start_0based)/len(motif):0.2f} x {motif} "
-			  f"==> {self.input_sequence[start_0based : self.current_position+1] if self.current_position - start_0based < 300 else '[too long]'}")
+			  f"{len(self.input_sequence):,d}bp  [{start_0based}:{self._current_position+1}], "
+			  f"run={self._run_length}, "
+			  f"i0={self._current_position}: "
+			  f"{(self._current_position - start_0based)/len(motif):0.2f} x {motif} "
+			  f"==> {self.input_sequence[start_0based : self._current_position+1] if self._current_position - start_0based < 300 else '[too long]'}")
 
 	def advance(self):
 		"""Increment current position within the input sequence while updating internal state and
@@ -95,44 +95,44 @@ class RepeatTracker:
 		"""
 
 		seq = self.input_sequence
-		if self.current_position >= len(seq) - self.motif_size:
+		if self._current_position >= len(seq) - self.motif_size:
 			self.log(f"advance() reached end of sequence")
 			return False
 
 		if self.debug_strings:
-			self.debug_strings[-1] += seq[self.current_position]
+			self.debug_strings[-1] += seq[self._current_position]
 
-		if seq[self.current_position] == seq[self.current_position + self.motif_size]:
-			self.log(f"Adding position {self.current_position} to repeat run")
-			self.run_length += 1
-			self.current_position += 1
+		if seq[self._current_position] == seq[self._current_position + self.motif_size]:
+			self.log(f"Adding position {self._current_position} to repeat run")
+			self._run_length += 1
+			self._current_position += 1
 			return True
 
 		if self.verbose:
-			print(f"Position {self.current_position} ({seq[self.current_position]}) doesn't match position {self.current_position + self.motif_size} ({seq[self.current_position + self.motif_size]})")
+			print(f"Position {self._current_position} ({seq[self._current_position]}) doesn't match position {self._current_position + self.motif_size} ({seq[self._current_position + self.motif_size]})")
 
-		if self.run_length > 0:
+		if self._run_length > 0:
 			if self.position_of_first_interruption is None:
 				# save the current position
-				self.log(f"Saving position {self.current_position} of the first interruption")
-				self.position_of_first_interruption = self.current_position
+				self.log(f"Saving position {self._current_position} of the first interruption")
+				self.position_of_first_interruption = self._current_position
 
-			current_position_in_motif = self.run_length % self.motif_size
+			current_position_in_motif = self._run_length % self.motif_size
 			if len(self.current_interrupted_positions_in_motif) < self.max_interruptions:
 				self.log(f"Allowing base #{current_position_in_motif + 1} within the motif to vary across repeats.")
 				self.current_interrupted_positions_in_motif.add(current_position_in_motif)
 
 			if current_position_in_motif in self.current_interrupted_positions_in_motif:
 				if self.verbose:
-					print(f"Continuing to position {self.current_position + 1} despite interruption at position {current_position_in_motif}")
-				self.run_length += 1
-				self.current_position += 1
+					print(f"Continuing to position {self._current_position + 1} despite interruption at position {current_position_in_motif}")
+				self._run_length += 1
+				self._current_position += 1
 				return True
 
 		self.output_interval_if_it_passes_filters()
 
-		self.run_length = 0
-		self.current_position += 1
+		self._run_length = 0
+		self._current_position += 1
 		return True
 
 	def done(self):
@@ -144,15 +144,15 @@ class RepeatTracker:
 
 	def output_interval_if_it_passes_filters(self):
 		"""Check internal state to see if enough repeats have accumulated to output an interval. If yes, add it to
-		the output. self.current_position will be the 0-based position in the input sequence where the interval ends.
+		the output. self._current_position will be the 0-based position in the input sequence where the interval ends.
 		"""
-		if self.run_length + self.motif_size < self.min_span or self.run_length + self.motif_size < self.min_repeats * self.motif_size:
+		if self._run_length + self.motif_size < self.min_span or self._run_length + self.motif_size < self.min_repeats * self.motif_size:
 			return
 
 		self.log(f"Checking whether to output current repeat run")
 		seq = self.input_sequence
 
-		start_0based = self.current_position - self.run_length
+		start_0based = self._current_position - self._run_length
 		motif = seq[start_0based : start_0based + self.motif_size]
 		if "N" in motif:
 			# current repeat run did not pass filters, so reset
@@ -160,35 +160,35 @@ class RepeatTracker:
 			return
 
 		# extend the interval to the right, up to self.motif_size - 1 bases
-		while self.current_position < len(seq) and (
-			seq[self.current_position] == seq[self.current_position - self.motif_size]
-			or (self.run_length % self.motif_size) in self.current_interrupted_positions_in_motif
+		while self._current_position < len(seq) and (
+			seq[self._current_position] == seq[self._current_position - self.motif_size]
+			or (self._run_length % self.motif_size) in self.current_interrupted_positions_in_motif
 		):
 			if self.debug_strings:
-				self.debug_strings[-1] += seq[self.current_position]
-			self.run_length += 1
-			self.current_position += 1
-			self.log(f"Extend {motif} repeat to {start_0based}-{self.current_position}: {seq[start_0based:self.current_position]}")
+				self.debug_strings[-1] += seq[self._current_position]
+			self._run_length += 1
+			self._current_position += 1
+			self.log(f"Extend {motif} repeat to {start_0based}-{self._current_position}: {seq[start_0based:self._current_position]}")
 
-		if self.run_length < self.min_span or self.run_length < self.min_repeats * self.motif_size:
+		if self._run_length < self.min_span or self._run_length < self.min_repeats * self.motif_size:
 			self.reset_traversal()
 			return
 
 		#if not self.allow_ending_with_different_motif:
 		#	# search backward for an exact copy of the first repeat (ie. without any interruptions)
-		#	while (self.run_length >= self.min_span) and (self.run_length >= self.min_repeats * self.motif_size) and (
-		#		shift_string_by(seq[self.current_position - self.motif_size:self.current_position], self.run_length % self.motif_size) != motif
+		#	while (self._run_length >= self.min_span) and (self._run_length >= self.min_repeats * self.motif_size) and (
+		#		shift_string_by(seq[self._current_position - self.motif_size:self._current_position], self._run_length % self.motif_size) != motif
 		#	):
-		#		self.log(f"Moving back 1 because {motif} != {shift_string_by(seq[self.current_position - self.motif_size:self.current_position], self.run_length % self.motif_size)}")
-		#		self.current_position -= 1
-		#		self.run_length -= 1
+		#		self.log(f"Moving back 1 because {motif} != {shift_string_by(seq[self._current_position - self.motif_size:self._current_position], self._run_length % self.motif_size)}")
+		#		self._current_position -= 1
+		#		self._run_length -= 1
 
-		if self.run_length < self.min_span or self.run_length < self.min_repeats * self.motif_size:
+		if self._run_length < self.min_span or self._run_length < self.min_repeats * self.motif_size:
 			if self.verbose: print(f"==> No, this run doesn't span enough bases or have enough repeats of a {self.motif_size} bp motif.")
 			self.reset_traversal()
 			return
 
-		end = self.current_position
+		end = self._current_position
 		motif_previously_detected_at_this_interval = self.output_intervals.get((start_0based, end))
 		if (
 			# if another motif size has already been record for this exact interval by another RepeatTracker,
@@ -227,16 +227,16 @@ class RepeatTracker:
 		# start searching again from the position where the 1st interruption was detected
 		if self.position_of_first_interruption is not None:
 			if self.verbose:
-				print(f"Jumping back from position {self.current_position} to position of first interruption "
+				print(f"Jumping back from position {self._current_position} to position of first interruption "
 					  f"({self.position_of_first_interruption - 1})")
 
 			if self.debug_strings:
 				self.debug_strings.append(f"{self.position_of_first_interruption} - ")
 
-			self.current_position = self.position_of_first_interruption
+			self._current_position = self.position_of_first_interruption
 			self.position_of_first_interruption = None
 
-		self.run_length = 0
+		self._run_length = 0
 		self.current_interrupted_positions_in_motif.clear()
 
 	def print_debug_strings(self):

@@ -24,40 +24,40 @@ class PureRepeatTracker:
 		self.output_intervals = output_intervals
 		self.verbose = verbose
 
-		self.current_position = 0
-		self.run_length = 1
+		self._current_position = 0   # 0-based position in the input sequence
+		self._run_length = 1  # number of bases added so far to the current repeat interval
 
 	def log(self, message, force=False):
 		if not force and not self.verbose:
 			return
 
-		start_0based = max(0, self.current_position - self.run_length)
+		start_0based = max(0, self._current_position - self._run_length)
 		motif = self.input_sequence[start_0based : start_0based + self.motif_size]
 		print(f"{message:100s}  || PureRepeatTracker:"
-			  f"{len(self.input_sequence):,d}bp  [{start_0based}:{self.current_position+1}], "
-			  f"run={self.run_length}, "
-			  f"i0={self.current_position}: "
-			  f"{(self.current_position - start_0based)/len(motif):0.2f} x {motif} "
-			  f"==> {self.input_sequence[start_0based : self.current_position+1] if self.current_position - start_0based < 300 else '[too long]'}")
+			  f"{len(self.input_sequence):,d}bp  [{start_0based}:{self._current_position+1}], "
+			  f"run={self._run_length}, "
+			  f"i0={self._current_position}: "
+			  f"{(self._current_position - start_0based)/len(motif):0.2f} x {motif} "
+			  f"==> {self.input_sequence[start_0based : self._current_position+1] if self._current_position - start_0based < 300 else '[too long]'}")
 
 	def advance(self):
 		"""Increment current position within the input sequence while updating internal state and recording any detected repeats"""
 
 		seq = self.input_sequence
-		i = self.current_position
+		i = self._current_position
 		period = self.motif_size
 
 		if i >= len(seq) - period:
 			return False
 
 		if seq[i] == seq[i + period]:
-			self.current_position += 1
-			self.run_length += 1
+			self._current_position += 1
+			self._run_length += 1
 			return True
 
 		self.output_interval_if_it_passes_filters()
-		self.current_position += 1
-		self.run_length = 1
+		self._current_position += 1
+		self._run_length = 1
 		return True
 
 	def done(self):
@@ -70,21 +70,21 @@ class PureRepeatTracker:
 		"""
 
 		seq = self.input_sequence
-		i = self.current_position
+		i = self._current_position
 		period = self.motif_size
 
 		# found mismatch, check if previous run is worth outputing
-		start_0based = i - self.run_length + 1
+		start_0based = i - self._run_length + 1
 		motif = seq[start_0based:start_0based + period]
 		if "N" in motif:
 			return
 
-		if self.run_length + period - 1 >= self.min_span and self.run_length + period - 1 >= self.min_repeats * period:
+		if self._run_length + period - 1 >= self.min_span and self._run_length + period - 1 >= self.min_repeats * period:
 			while i < len(seq) - 1 and seq[i+1] == seq[i+1 - period]:
-				self.run_length += 1
+				self._run_length += 1
 				i += 1
 
-		if self.run_length >= self.min_span and self.run_length >= self.min_repeats * period:
+		if self._run_length >= self.min_span and self._run_length >= self.min_repeats * period:
 			end = i + 1
 
 			previous_motif = self.output_intervals.get((start_0based, end))
