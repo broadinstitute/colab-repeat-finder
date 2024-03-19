@@ -69,7 +69,7 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
 
     if all(max_interruptions == 0 for max_interruptions in filter_settings.max_interruptions_by_motif_size.values()):
         # if all repeats must be pure, the repeat trackers can just advance linearly through the sequence
-        print("Running pure repeat trackers for motifs", list(repeat_trackers.keys()))
+        if verbose: print("Running pure repeat trackers for motifs", list(repeat_trackers.keys()))
         if show_progress_bar:
             input_sequence = tqdm.tqdm(input_sequence, unit=" bp", unit_scale=True, total=len(input_sequence))
 

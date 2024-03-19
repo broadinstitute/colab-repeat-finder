@@ -32,15 +32,29 @@ class RepeatFinderTests(unittest.TestCase):
 			if len(motif) <= 7:
 				self.assertEqual(repeats, [(0, len(seq), motif)], f"Error on sequence: {seq}")
 			else:
-				self.assertEqual(repeats, [], f"Error on sequence: {seq}")
+				self.assertEqual(repeats, [], f"Error on sequence:= {seq}. Got {repeats}")
+
+		for motif in "A", "CA", "CAG", "CAGA", "CAGAT", "CAGATT", "CAGATAT", "CAGATTAG":
+			seq = 6*motif + 10*"TA"
+			repeats = detect_repeats(seq, filter_settings)
+			expected_TA_repeat_result = (6*len(motif) - 1, len(seq), "AT") if motif.endswith("A") else (6*len(motif), len(seq), "TA")
+			if len(motif) <= 7:
+				self.assertEqual(repeats, [
+					(0, 6*len(motif), motif),
+					expected_TA_repeat_result,
+				], f"Error on sequence: {seq}. Got {repeats}")
+			else:
+				self.assertEqual(repeats, [
+					expected_TA_repeat_result,
+				], f"Error on sequence: {seq}. Got {repeats}")
 
 		seq = "A"*9 + "C"*11 + "G"*10 + "T"*9
 		repeats = detect_repeats(seq, filter_settings)
-		self.assertEqual(repeats, [(0, 9, "A"), (9, 20, "C"), (20, 30, "G"), (30, 39, "T")], f"Error on sequence: {seq}")
+		self.assertEqual(repeats, [(0, 9, "A"), (9, 20, "C"), (20, 30, "G"), (30, 39, "T")], f"Error on sequence: {seq}. Got {repeats}")
 
 		seq = "CA"*9 + "GT"*11 + "CG"*10 + "TA"*9
 		repeats = detect_repeats(seq, filter_settings)
-		self.assertEqual(repeats, [(0, 18, "CA"), (18, 40, "GT"), (40, 60, "CG"), (60, 78, "TA")], f"Error on sequence: {seq}")
+		self.assertEqual(repeats, [(0, 18, "CA"), (18, 40, "GT"), (40, 60, "CG"), (60, 78, "TA")], f"Error on sequence: {seq}. Got {repeats}")
 
 		motif = "A"
 		filter_settings.min_motif_size = 2
@@ -56,9 +70,9 @@ class RepeatFinderTests(unittest.TestCase):
 		filter_settings.min_motif_size = 2
 		filter_settings.max_motif_size = 10
 		repeats = detect_repeats(seq, filter_settings)
-		self.assertEqual(repeats, [(0, 8, "AA"), (7, 36, "AGAC"), (33, 65, "ACA")], f"Error on sequence: {seq}")
+		self.assertEqual(repeats, [(0, 8, "AA"), (7, 36, "AGAC"), (33, 65, "ACA")], f"Error on sequence: {seq}. Got {repeats}")
 
 		filter_settings.min_motif_size = 1
 		repeats = detect_repeats(seq, filter_settings)
-		self.assertEqual(repeats, [(0, 8, "A"), (7, 36, "AGAC"), (33, 65, "ACA")], f"Error on sequence: {seq}")
+		self.assertEqual(repeats, [(0, 8, "A"), (7, 36, "AGAC"), (33, 65, "ACA")], f"Error on sequence: {seq}. Got {repeats}")
 
