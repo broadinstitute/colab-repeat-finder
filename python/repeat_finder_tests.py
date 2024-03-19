@@ -50,11 +50,15 @@ class RepeatFinderTests(unittest.TestCase):
 
 		seq = "A"*9 + "C"*11 + "G"*10 + "T"*9
 		repeats = detect_repeats(seq, filter_settings)
-		self.assertEqual(repeats, [(0, 9, "A"), (9, 20, "C"), (20, 30, "G"), (30, 39, "T")], f"Error on sequence: {seq}. Got {repeats}")
+		self.assertEqual(repeats, [
+			(0, 9, "A"), (9, 20, "C"), (20, 30, "G"), (30, 39, "T"),
+		], f"Error on sequence: {seq}. Got {repeats}")
 
 		seq = "CA"*9 + "GT"*11 + "CG"*10 + "TA"*9
 		repeats = detect_repeats(seq, filter_settings)
-		self.assertEqual(repeats, [(0, 18, "CA"), (18, 40, "GT"), (40, 60, "CG"), (60, 78, "TA")], f"Error on sequence: {seq}. Got {repeats}")
+		self.assertEqual(repeats, [
+			(0, 18, "CA"), (18, 40, "GT"), (40, 60, "CG"), (60, 78, "TA"),
+		], f"Error on sequence: {seq}. Got {repeats}")
 
 		motif = "A"
 		filter_settings.min_motif_size = 2
@@ -70,9 +74,31 @@ class RepeatFinderTests(unittest.TestCase):
 		filter_settings.min_motif_size = 2
 		filter_settings.max_motif_size = 10
 		repeats = detect_repeats(seq, filter_settings)
-		self.assertEqual(repeats, [(0, 8, "AA"), (7, 36, "AGAC"), (33, 65, "ACA")], f"Error on sequence: {seq}. Got {repeats}")
+		self.assertEqual(repeats, [
+			(0, 8, "AA"), (7, 36, "AGAC"), (33, 65, "ACA"),
+		], f"Error on sequence: {seq}. Got {repeats}")
 
 		filter_settings.min_motif_size = 1
 		repeats = detect_repeats(seq, filter_settings)
-		self.assertEqual(repeats, [(0, 8, "A"), (7, 36, "AGAC"), (33, 65, "ACA")], f"Error on sequence: {seq}. Got {repeats}")
+		self.assertEqual(repeats, [
+			(0, 8, "A"), (7, 36, "AGAC"), (33, 65, "ACA"),
+		], f"Error on sequence: {seq}. Got {repeats}")
 
+
+
+		filter_settings.min_motif_size = 1
+		filter_settings.max_motif_size = 20
+		filter_settings.min_span = 12
+
+		# test overlapping repeats
+		for overlap_by in range(1, 10):
+			left_motif = "T" + "A"*overlap_by
+			right_motif = (overlap_by+1)*"A" + "T"
+
+			seq = 9*left_motif + "T" + 11*right_motif
+			repeats = detect_repeats(seq, filter_settings)
+
+			self.assertEqual(repeats, [
+				(0, len(left_motif)*10, left_motif),
+				(len(left_motif)*8 + 1, len(seq), shift_string_by(right_motif, -1)),
+			], f"Error on sequence: {seq}. Got {repeats}")
