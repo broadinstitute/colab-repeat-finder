@@ -91,3 +91,7 @@ class PureRepeatTracker:
 			if previous_motif is None or len(motif) < len(previous_motif):
 				self.output_intervals[(start_0based, end)] = motif
 
+	@property
+	def current_position(self):
+		return self._current_position
+

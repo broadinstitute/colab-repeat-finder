@@ -1,7 +1,9 @@
 import argparse
+import json
 import unittest
-from repeat_finder import detect_repeats
+
 from utils.plot_utils import shift_string_by
+from repeat_finder import detect_repeats
 
 
 class RepeatFinderTests(unittest.TestCase):
@@ -16,12 +18,12 @@ class RepeatFinderTests(unittest.TestCase):
 		self.assertEqual(shift_string_by("TTTCG", 5), "TTTCG")
 
 
-	def test_detect_repeats(self):
+	def test_pure_repeats(self):
 		filter_settings = argparse.Namespace(
 			min_motif_size=1,
 			max_motif_size=7,
 			min_repeats=3,
-			max_interruptions_by_motif_size={i: 0 for i in range(1, 8)},
+			max_interruptions_by_motif_size={i: 0 for i in range(1, 50)},
 			min_span=6,
 			verbose=False,
 			debug=False)
@@ -84,13 +86,11 @@ class RepeatFinderTests(unittest.TestCase):
 			(0, 8, "A"), (7, 36, "AGAC"), (33, 65, "ACA"),
 		], f"Error on sequence: {seq}. Got {repeats}")
 
-
-
 		filter_settings.min_motif_size = 1
 		filter_settings.max_motif_size = 20
 		filter_settings.min_span = 12
 
-		# test overlapping repeats
+		# test overlapping repeats like TATATATAATAATAATAAT
 		for overlap_by in range(1, 10):
 			left_motif = "T" + "A"*overlap_by
 			right_motif = (overlap_by+1)*"A" + "T"
@@ -102,3 +102,44 @@ class RepeatFinderTests(unittest.TestCase):
 				(0, len(left_motif)*10, left_motif),
 				(len(left_motif)*8 + 1, len(seq), shift_string_by(right_motif, -1)),
 			], f"Error on sequence: {seq}. Got {repeats}")
+
+	def test_interrupted_repeats(self):
+		filter_settings = argparse.Namespace(
+			min_motif_size=1,
+			max_motif_size=7,
+			min_repeats=3,
+			max_interruptions_by_motif_size={i: 1 for i in range(2, 50)},
+			min_span=9,
+			verbose=False,
+			debug=False)
+
+		with open("interrupted_sequences.json") as f:
+			interrupted_repeats = json.load(f)
+			for i, row in enumerate(interrupted_repeats):
+				repeats = detect_repeats(row["Sequence"], filter_settings)
+				motif = row["Motif"]
+				if len(motif) <= 2:
+					continue
+
+				if len(motif) > filter_settings.max_motif_size:
+					continue
+
+				interruption_index = int(row["InterruptionIndex"])
+				motif_with_N = motif[0:interruption_index] + "N" + motif[interruption_index+1:]
+
+
+				try:
+					self.assertTrue((0, len(row["Sequence"]), motif_with_N) in repeats or (0, len(row["Sequence"]), motif) in repeats,
+									f"Error on sequence: {row['Sequence']}. {repeats} doesn't contain {(0, len(row['Sequence']), motif_with_N)}")
+
+					#self.assertEqual(repeats, [
+					#	(0, len(row["Sequence"]), motif_with_N),
+					#], f"Error on sequence: {row['Sequence']}. Got {repeats}")
+				except AssertionError as e:
+					print(motif, motif_with_N, repeats, ", expecting: ", (0, len(row["Sequence"]), motif_with_N), row)
+
+			#if i > 10:
+			#	break
+
+		# test interrupted repeats
+

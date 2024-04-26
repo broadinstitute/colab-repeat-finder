@@ -36,10 +36,11 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
         raise ValueError(f"min_repeats is set to {filter_settings.min_repeats}. It must be at least 1.")
     if not getattr(filter_settings, "min_span") or filter_settings.min_span < 1:
         raise ValueError(f"min_span is set to {filter_settings.min_span}. It must be at least 1.")
+    if not getattr(filter_settings, "max_interruptions_by_motif_size"):
+        raise ValueError(f"max_interruptions_by_motif_size is not set.")
 
     input_sequence = input_sequence.upper()
 
-    #global repeat_trackers
     # generate all intervals
     output_intervals = {}
     repeat_trackers = {}
@@ -99,10 +100,11 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
                     repeat_trackers_that_are_done.append(motif_size)
                     if verbose: print(f"Done with motif size {motif_size}bp")
 
-                if progress_bar:
-                    while progress_bar_position < repeat_tracker.current_position:
-                        next(progress_bar)
-                        progress_bar_position += 1
+            if progress_bar:
+                current_position = min(repeat_tracker.current_position for repeat_tracker in repeat_trackers.values())
+                while progress_bar_position < current_position:
+                    next(progress_bar)
+                    progress_bar_position += 1
 
             for motif_size in repeat_trackers_that_are_done:
                 del repeat_trackers[motif_size]
@@ -160,7 +162,7 @@ def main():
         for motif_size in range(args.min_motif_size, args.max_motif_size + 1):
             args.max_interruptions_by_motif_size[motif_size] = 0
 
-        with (open(args.max_interruptions, "rt") as tsv_file):
+        with open(args.max_interruptions, "rt") as tsv_file:
             header = tsv_file.readline().strip().split("\t")
             if header != ["MotifSize", "MaxInterruptions"]:
                 parser.error(f"Invalid header in {args.max_interruptions}. Expected 2 columns named: 'MotifSize\tMaxInterruptions'")
@@ -200,7 +202,7 @@ def main():
         if not args.output_prefix:
             args.output_prefix = re.sub(".fa(sta)?(.gz)?", "", args.input_sequence)
 
-        output_bed_path = f"{args.output_prefix}.bed"
+        output_bed_path = f"{os.path.basename(args.output_prefix)}.bed"
         fasta_entries = pyfastx.Fasta(args.input_sequence)
         if args.interval:
             interval = re.split("[:-]", args.interval)
@@ -224,7 +226,7 @@ def main():
                 seq = fasta_entry.seq
                 chrom = fasta_entry.name
                 print(f"Processing {chrom} ({len(seq):,d} bp)")
-                output_intervals = detect_repeats(seq, args, verbose=args.verbose, show_progress_bar=args.show_progress_bar)
+                output_intervals = detect_repeats(seq, args, verbose=args.verbose, show_progress_bar=args.show_progress_bar, debug=args.debug)
                 print(f"Found {len(output_intervals):,d} repeats")
                 for start_0based, end, motif in output_intervals:
                     if args.interval:
@@ -235,7 +237,6 @@ def main():
 
     elif set(args.input_sequence.upper()) <= set("ACGTN"):
         # process nucleotide sequence specified on the command line
-
         if args.interval:
             parser.error("The --interval option is only supported for FASTA files.")
 

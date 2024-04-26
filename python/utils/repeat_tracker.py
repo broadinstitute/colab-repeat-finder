@@ -247,3 +247,6 @@ class RepeatTracker:
 			for i, s in enumerate(self.debug_strings):
 				print("  "*i, s)
 
+	@property
+	def current_position(self):
+		return self._current_position
