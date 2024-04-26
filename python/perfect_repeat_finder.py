@@ -4,7 +4,7 @@ import os
 import re
 import tqdm
 
-from utils.pure_repeat_tracker import PureRepeatTracker
+from utils.perfect_repeat_tracker import PerfectRepeatTracker
 
 
 def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress_bar=False, debug=False):
@@ -35,7 +35,7 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
     output_intervals = {}
     repeat_trackers = {}
     for motif_size in range(filter_settings.min_motif_size, filter_settings.max_motif_size + 1):
-        repeat_tracker = PureRepeatTracker(
+        repeat_tracker = PerfectRepeatTracker(
             motif_size=motif_size,
             min_repeats=filter_settings.min_repeats,
             min_span=filter_settings.min_span,
@@ -58,7 +58,7 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
     return [(start_0based, end, motif) for (start_0based, end), motif in sorted(output_intervals.items())]
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     group = parser.add_argument_group("Repeat Filters")
     group.add_argument("-min", "--min-motif-size", default=1, type=int, help="Minimum motif size in base pairs.")
     group.add_argument("-max", "--max-motif-size", default=50, type=int, help="Maximum motif size in base pairs.")

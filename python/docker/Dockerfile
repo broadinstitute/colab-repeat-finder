@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
 
 COPY utils /utils
 COPY repeat_finder.py /repeat_finder.py
-COPY repeat_finder_pure_repeats.py /repeat_finder_pure_repeats.py
+COPY perfect_repeat_finder.py /perfect_repeat_finder.py
 
 COPY requirements.txt /requirements.txt
 RUN python3 -m pip install -r /requirements.txt

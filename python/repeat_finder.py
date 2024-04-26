@@ -4,7 +4,7 @@ import os
 import re
 import tqdm
 
-from utils.pure_repeat_tracker import PureRepeatTracker
+from utils.perfect_repeat_tracker import PerfectRepeatTracker
 from utils.repeat_tracker import RepeatTracker
 from utils.plot_utils import plot_results
 
@@ -59,7 +59,7 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
                 debug=filter_settings.debug,
             )
         else:
-            repeat_tracker = PureRepeatTracker(
+            repeat_tracker = PerfectRepeatTracker(
                 motif_size=motif_size,
                 min_repeats=filter_settings.min_repeats,
                 min_span=filter_settings.min_span,
@@ -69,8 +69,8 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
         repeat_trackers[motif_size] = repeat_tracker
 
     if all(max_interruptions == 0 for max_interruptions in filter_settings.max_interruptions_by_motif_size.values()):
-        # if all repeats must be pure, the repeat trackers can just advance linearly through the sequence
-        if verbose: print("Running pure repeat trackers for motifs", list(repeat_trackers.keys()))
+        # if all repeats must be perfect, the repeat trackers can just advance linearly through the sequence
+        if verbose: print("Running perfect repeat trackers for motifs", list(repeat_trackers.keys()))
         if show_progress_bar:
             input_sequence = tqdm.tqdm(input_sequence, unit=" bp", unit_scale=True, total=len(input_sequence))
 

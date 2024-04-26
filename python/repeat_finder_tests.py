@@ -18,7 +18,7 @@ class RepeatFinderTests(unittest.TestCase):
 		self.assertEqual(shift_string_by("TTTCG", 5), "TTTCG")
 
 
-	def test_pure_repeats(self):
+	def test_perfect_repeats(self):
 		filter_settings = argparse.Namespace(
 			min_motif_size=1,
 			max_motif_size=7,

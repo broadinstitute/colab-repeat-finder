@@ -1,4 +1,4 @@
-"""RepeatTracker class for detecting both pure and interrupted repeats of a given motif size in a sequence."""
+"""RepeatTracker class for detecting both perfect and interrupted repeats of a given motif size in a sequence."""
 from utils.plot_utils import shift_string_by
 
 
@@ -75,9 +75,9 @@ class RepeatTracker:
 
 		Return False if the end of the input sequence has been reached.
 
-		Pure repeats:
+		Perfect repeats:
 
-		For pure repeats, the algorithm moves forward 1 base at a time, incrementing run_length until it reaches
+		For perfect repeats, the algorithm moves forward 1 base at a time, incrementing run_length until it reaches
 		a position in the sequence where the current base differs from the base at curret position + motif size.
 		Then, it checks if the base(s) between the few extra bases between the curent position and positions
 		ahead of the interruption at current position + motif size are still consistent with the current repeat run.

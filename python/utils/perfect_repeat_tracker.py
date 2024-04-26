@@ -1,6 +1,6 @@
 """Original code for the RepeatTracker class before it was refactored to allow detection of interrupted repeats"""
 
-class PureRepeatTracker:
+class PerfectRepeatTracker:
 	"""This class tracks repeats of a single motif size in a given input sequence. It outputs all perfect repeats of
 	this that pass filter criteria while scanning the input sequence from left to right"""
 
@@ -33,7 +33,7 @@ class PureRepeatTracker:
 
 		start_0based = max(0, self._current_position - self._run_length)
 		motif = self.input_sequence[start_0based : start_0based + self.motif_size]
-		print(f"{message:100s}  || PureRepeatTracker:"
+		print(f"{message:100s}  || PerfectRepeatTracker:"
 			  f"{len(self.input_sequence):,d}bp  [{start_0based}:{self._current_position+1}], "
 			  f"run={self._run_length}, "
 			  f"i0={self._current_position}: "

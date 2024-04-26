@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from pprint import pformat
+import hailtop.fs as hfs
 
 from step_pipeline import pipeline, Backend, Localize, Delocalize
 
@@ -12,7 +13,6 @@ logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=logg
 logger = logging.getLogger(__name__)
 
 REFERENCE_GENOME_FASTA = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta"
-LOCAL_FAI_INDEX = "~/hg38.fa.fai"
 
 OUTPUT_BASE_DIR = f"gs://bw-proj/gnomad-bw/colab-repeat-finder/hg38"
 
@@ -24,6 +24,9 @@ def run(cmd):
 
 def parse_args(batch_pipeline):
     p = batch_pipeline.get_config_arg_parser()
+
+    p.add_argument("--min-span", type=int, default=9)
+    p.add_argument("--min-repeats", type=int, default=3)
     p.add_argument("--min-motif-size", type=int, default=1)
     p.add_argument("--max-motif-size", type=int, default=50) #default=18000//3)
     p.add_argument("--batch-size", help="Interval size in base pairs to process per job", type=int, default=10_000_000)
@@ -44,7 +47,7 @@ def main():
 
     # compute batch sizes
     batches = []
-    with open(os.path.expanduser(LOCAL_FAI_INDEX), "rt") as fai_index_file:
+    with hfs.open(f"{REFERENCE_GENOME_FASTA}.fai") as fai_index_file:
         for line in fai_index_file:
             fields = line.strip().split("\t")
             chrom = fields[0]
@@ -56,7 +59,11 @@ def main():
             for start_0based in range(0, chrom_size, args.batch_size):
                 batches.append((chrom, start_0based, min(chrom_size, start_0based + args.batch_size)))
 
-    output_dir = os.path.join(OUTPUT_BASE_DIR, f"motifs_{args.min_motif_size}_to_{args.max_motif_size}bp")
+    common_prefix = (
+        f"{args.output_prefix}.motifs_{args.min_motif_size}_to_{args.max_motif_size}bp"
+        f".repeats_{args.min_repeats}x_and_spans_{args.min_span}bp"
+    )
+    output_dir = os.path.join(OUTPUT_BASE_DIR, common_prefix)
     bp.precache_file_paths(os.path.join(output_dir, f"**/*.bed*"))
     steps = []
     files_to_download_when_done = []
@@ -64,7 +71,7 @@ def main():
         if args.n and i >= args.n:
             break
 
-        output_prefix = f"{args.output_prefix}.motifs_{args.min_motif_size}_to_{args.max_motif_size}bp.{chrom}_{start_0based:09d}_{end:09d}"
+        output_prefix = f"{common_prefix}.{chrom}_{start_0based:09d}_{end:09d}"
 
         s1 = bp.new_step(
             f"{output_prefix} [motifs: {args.min_motif_size}-{args.max_motif_size}]",
@@ -84,12 +91,12 @@ def main():
         local_fasta, _ = s1.inputs(REFERENCE_GENOME_FASTA, f"{REFERENCE_GENOME_FASTA}.fai")
 
         s1.command("set -ex")
-        s1.command(f"""time python3 /repeat_finder_pure_repeats.py \
+        s1.command(f"""time python3 /perfect_repeat_finder.py \
             --min-motif-size {args.min_motif_size} \
             --max-motif-size {args.max_motif_size} \
             --interval {chrom}:{start_0based}-{end} \
-            --min-span 6 \
-            --min-repeats 3 \
+            --min-span {args.min_span} \
+            --min-repeats {args.min_repeats} \
             --show-progress-bar \
             --output-prefix {output_prefix} \
             {local_fasta}
@@ -102,7 +109,7 @@ def main():
         s1.output(f"{output_prefix}.bed.gz.tbi")
 
 
-    combined_output_file = f"{args.output_prefix}.motifs_{args.min_motif_size}_to_{args.max_motif_size}bp.bed"
+    combined_output_file = f"{common_prefix}.bed"
     print(f"Generating combined output file: {combined_output_file}")
     s2 = bp.new_step(
         name="combine_job",

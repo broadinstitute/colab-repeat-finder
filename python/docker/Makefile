@@ -1,11 +1,10 @@
-TAG1 = weisburd/colab-repeat-finder:v1
-TAG2 = weisburd/colab-repeat-finder:latest
+TAG = weisburd/colab-repeat-finder:latest
 
 all: build push
 
 build:
-	cd .. && docker build -t $(TAG1) -t $(TAG2) -f docker/Dockerfile .
+	cd .. && docker build -t $(TAG) -f docker/Dockerfile .
 
 push:
-	docker push $(TAG1)
-	docker push $(TAG2)
+	docker push $(TAG)
+	docker push $(TAG) | tee /dev/tty | grep sha256 | grep latest | cut -d ' ' -f 3 > sha256.txt

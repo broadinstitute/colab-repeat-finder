@@ -1,6 +1,6 @@
 set -ex
 
-# run TandemRepeatFinder to detect only pure repeats (installed from https://github.com/Benson-Genomics-Lab/TRF)
+# run TandemRepeatFinder to detect only perfect repeats (installed from https://github.com/Benson-Genomics-Lab/TRF)
 gunzip -c ../chr22.fa.gz > chr22.fa
 time trf409.macosx chr22.fa 2 10000000 10000000 80 10 2 2000 -h -l 6 -ngs > chr22.trf.dat
 rm chr22.fa
