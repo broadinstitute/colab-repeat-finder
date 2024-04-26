@@ -14,7 +14,7 @@ python3 python/perfect_repeat_finder.py \
   --max-motif-size 6 \
   --interval chr1:1-10000000 \
   --show-progress-bar \
-/path/to/hg38.fa
+  /path/to/hg38.fa
 ```
 
 It takes 55 seconds and detects all repeats in the first 10Mb of chr1 that pass the following criteria:  
