@@ -17,7 +17,7 @@ python3 python/perfect_repeat_finder.py \
   /path/to/hg38.fa
 ```
 
-It takes 55 seconds and detects all repeats in the first 10Mb of chr1 that pass the following criteria:  
+It takes 55 seconds and detects all 63,738 perfect repeats in the first 10Mb of chr1 that pass the following criteria:  
 - spans at least 9bp from start to end
 - includes at least 3 perfect repeats of some motif
 - 2bp ≤ motif size ≤ 6bp
