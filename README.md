@@ -22,7 +22,7 @@ It takes 55 seconds and detects all 63,738 perfect repeats in the first 10Mb of 
 - include at least 3 perfect repeats of some motif
 - have 2bp ≤ motif size ≤ 6bp
 
-**NOTE:** run time is proportional to the length of the input sequence and the range of motif sizes included in the output. 
+**NOTE:** running time is proportional to the length of the input sequence and the range of motif sizes included in the output. 
 
 ---
 Example BED output file:
