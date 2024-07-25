@@ -1,7 +1,6 @@
-This repo contains:
+[**perfect_repeat_finder.py**](python/perfect_repeat_finder.py) is a tool that takes a nucleotide sequence or FASTA file as input, finds all perfect tandem repeats (ie. those without interruptions) that pass user-defined criteria, and outputs their exact genomic coordinates and repeat motifs to a BED file.
 
-- [**perfect_repeat_finder.py**](python/perfect_repeat_finder.py) -  a tool that takes a nucleotide sequence or FASTA file as input, finds all perfect tandem repeats (ie. those without interruptions) that pass user-defined criteria, and outputs their exact genomic coordinates and repeat motifs to a BED file.
-- *other tools are under development*
+*additional tools are under development*
 
 ---
 Example command-line:
