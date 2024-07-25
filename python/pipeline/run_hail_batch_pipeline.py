@@ -97,7 +97,6 @@ def main():
             --interval {chrom}:{start_0based}-{end} \
             --min-span {args.min_span} \
             --min-repeats {args.min_repeats} \
-            --show-progress-bar \
             --output-prefix {output_prefix} \
             {local_fasta}
         """)
