@@ -29,7 +29,13 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
     if not getattr(filter_settings, "min_span") or filter_settings.min_span < 1:
         raise ValueError(f"min_span is set to {filter_settings.min_span}. It must be at least 1.")
 
+
     input_sequence = input_sequence.upper()
+
+    interval_start_0based = getattr(filter_settings, "interval_start_0based", 0)
+    interval_end = getattr(filter_settings, "interval_end", len(input_sequence))
+
+    input_sequence = input_sequence[interval_start_0based:]
 
     # generate all intervals
     output_intervals = {}
@@ -44,18 +50,26 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
         )
         repeat_trackers[motif_size] = repeat_tracker
 
+    end_position = interval_end - interval_start_0based
     if show_progress_bar:
-        input_sequence = tqdm.tqdm(input_sequence, unit=" bp", unit_scale=True, total=len(input_sequence))
+        input_sequence = tqdm.tqdm(input_sequence, unit=" bp", unit_scale=True, total=end_position)
 
-    for _ in input_sequence:
+    for position in range(len(input_sequence)):
+        any_in_middle_of_repeat = False
         for repeat_tracker in repeat_trackers.values():
             repeat_tracker.advance()
+            any_in_middle_of_repeat = repeat_tracker.is_in_middle_of_repeat() or any_in_middle_of_repeat
+
+        # if one of the repeat trackers is in the middle of a repeat, keep processing past the end of the interval
+        if position > end_position and not any_in_middle_of_repeat:
+            break
 
     for repeat_tracker in repeat_trackers.values():
-        assert not repeat_tracker.advance(), f"{repeat_tracker.motif_size}bp motif RepeatTracker did not reach end of the sequence"
+        if interval_end == len(input_sequence):
+            assert not repeat_tracker.advance(), f"{repeat_tracker.motif_size}bp motif RepeatTracker did not reach end of the sequence"
         repeat_tracker.done()
 
-    return [(start_0based, end, motif) for (start_0based, end), motif in sorted(output_intervals.items())]
+    return [(start_0based + interval_start_0based, end + interval_start_0based, motif) for (start_0based, end), motif in sorted(output_intervals.items())]
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -96,17 +110,17 @@ def main():
             interval = re.split("[:-]", args.interval)
             if len(interval) != 3:
                 parser.error(f"Invalid --plot-interval format. Must be chrom:start_0based-end")
-            interval_chrom, interval_start_0based, interval_end = interval
-            interval_start_0based = int(interval_start_0based)
-            interval_end = int(interval_end)
+            args.interval_chrom, args.interval_start_0based, args.interval_end = interval
+            args.interval_start_0based = int(args.interval_start_0based)
+            args.interval_end = int(args.interval_end)
 
             # iterate over chromosomes in the FASTA file
-            if interval_chrom not in fasta_entries:
-                parser.error(f"Chromosome {interval_chrom} not found in the input FASTA file")
+            if args.interval_chrom not in fasta_entries:
+                parser.error(f"Chromosome {args.interval_chrom} not found in the input FASTA file")
 
-            interval_sequence = fasta_entries[interval_chrom][interval_start_0based:interval_end].seq
+            chrom_sequence = fasta_entries[args.interval_chrom].seq
             fasta_entries = [
-                argparse.Namespace(name=interval_chrom, seq=interval_sequence)
+                argparse.Namespace(name=args.interval_chrom, seq=chrom_sequence)
             ]
 
         with open(output_bed_path, "wt") as bed_file:
@@ -114,13 +128,12 @@ def main():
                 seq = fasta_entry.seq
                 chrom = fasta_entry.name
                 print(f"Processing {chrom} ({len(seq):,d} bp)")
-                output_intervals = detect_repeats(seq, args, verbose=args.verbose, show_progress_bar=args.show_progress_bar, debug=args.debug)
+                output_intervals = detect_repeats(
+                    seq, args, verbose=args.verbose, show_progress_bar=args.show_progress_bar, debug=args.debug)
                 print(f"Found {len(output_intervals):,d} repeats")
                 for start_0based, end, motif in output_intervals:
-                    if args.interval:
-                        start_0based += interval_start_0based
-                        end += interval_start_0based
                     bed_file.write("\t".join([chrom, str(start_0based), str(end), motif]) + "\n")
+
         print(f"Wrote results to {output_bed_path}")
 
     elif set(args.input_sequence.upper()) <= set("ACGTN"):

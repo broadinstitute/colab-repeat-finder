@@ -7,7 +7,7 @@ import hailtop.fs as hfs
 
 from step_pipeline import pipeline, Backend, Localize, Delocalize
 
-DOCKER_IMAGE = "weisburd/colab-repeat-finder@sha256:aff1107a38f40fdfdc091e916ae2b7d960865e5019ebb141789e51b460ac3425"
+DOCKER_IMAGE = "weisburd/colab-repeat-finder@sha256:fd956adffeab6f49fbbdbc1930d7e6952a81e1ad450da3252ba1597e6fb6706a"
 
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,8 +28,8 @@ def parse_args(batch_pipeline):
     p.add_argument("--min-span", type=int, default=9)
     p.add_argument("--min-repeats", type=int, default=3)
     p.add_argument("--min-motif-size", type=int, default=1)
-    p.add_argument("--max-motif-size", type=int, default=50) #default=18000//3)
-    p.add_argument("--batch-size", help="Interval size in base pairs to process per job", type=int, default=10_000_000)
+    p.add_argument("--max-motif-size", type=int, default=1_000) #default=18000//3)
+    p.add_argument("--batch-size", help="Interval size in base pairs to process per job", type=int, default=500_000)
     p.add_argument("--output-prefix", default="hg38_repeats")
     p.add_argument("-n", type=int, help="Test-run this many batches")
 

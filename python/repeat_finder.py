@@ -41,6 +41,11 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
 
     input_sequence = input_sequence.upper()
 
+    interval_start_0based = getattr(filter_settings, "interval_start_0based", 0)
+    interval_end = getattr(filter_settings, "interval_end", len(input_sequence))
+
+    input_sequence = input_sequence[interval_start_0based:]
+
     # generate all intervals
     output_intervals = {}
     repeat_trackers = {}

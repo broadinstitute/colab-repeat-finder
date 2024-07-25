@@ -60,6 +60,10 @@ class PerfectRepeatTracker:
 		self._run_length = 1
 		return True
 
+	def is_in_middle_of_repeat(self):
+		"""Check if the current position is in the middle of a repeat"""
+		return self._run_length >= self.motif_size + 1
+
 	def done(self):
 		"""Output the last interval if it passes filters"""
 		self.output_interval_if_it_passes_filters()
