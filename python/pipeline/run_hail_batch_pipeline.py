@@ -8,6 +8,7 @@ import hailtop.fs as hfs
 from step_pipeline import pipeline, Backend, Localize, Delocalize
 
 DOCKER_IMAGE = "weisburd/colab-repeat-finder@sha256:fd956adffeab6f49fbbdbc1930d7e6952a81e1ad450da3252ba1597e6fb6706a"
+STR_ANALYSIS_DOCKER_IMAGE = "weisburd/str-analysis@sha256:504a9ea2ec1143cc38ea6013bf4af7cc266f3e80b47703ad43ea78d425b83295"
 
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,9 +30,11 @@ def parse_args(batch_pipeline):
     p.add_argument("--min-repeats", type=int, default=3)
     p.add_argument("--min-motif-size", type=int, default=1)
     p.add_argument("--max-motif-size", type=int, default=1_000) #default=18000//3)
+    p.add_argument("--use-nonpreemptibles", action="store_true")
     p.add_argument("--batch-size", help="Interval size in base pairs to process per job", type=int, default=500_000)
     p.add_argument("--output-prefix", default="hg38_repeats")
-    p.add_argument("-n", type=int, help="Test-run this many batches")
+    p.add_argument("--start-batch-i", type=int, help="Start processing from this batch", default=0)
+    p.add_argument("-n", type=int, help="Run only this many batches")
 
     args = batch_pipeline.parse_known_args()
 
@@ -64,11 +67,14 @@ def main():
         f".repeats_{args.min_repeats}x_and_spans_{args.min_span}bp"
     )
     output_dir = os.path.join(OUTPUT_BASE_DIR, common_prefix)
-    bp.precache_file_paths(os.path.join(output_dir, f"**/*.bed*"))
+    output_paths_glob = os.path.join(output_dir, f"**/*.bed*")
+    bp.precache_file_paths(output_paths_glob)
     steps = []
     files_to_download_when_done = []
     for i, (chrom, start_0based, end) in enumerate(batches):
-        if args.n and i >= args.n:
+        if i < args.start_batch_i:
+            continue
+        if args.n and i >= args.start_batch_i + args.n:
             break
 
         output_prefix = f"{common_prefix}.{chrom}_{start_0based:09d}_{end:09d}"
@@ -76,11 +82,12 @@ def main():
         s1 = bp.new_step(
             f"{output_prefix} [motifs: {args.min_motif_size}-{args.max_motif_size}]",
             arg_suffix=f"crf",
-            image=DOCKER_IMAGE,
+            image=STR_ANALYSIS_DOCKER_IMAGE,
             step_number=1,
             cpu=1,
             storage="5Gi",
             memory="standard",
+            preemptible=not args.use_nonpreemptibles,
             localize_by=Localize.COPY, #HAIL_BATCH_CLOUDFUSE,
             delocalize_by=Delocalize.COPY,
             output_dir=output_dir)
@@ -107,13 +114,12 @@ def main():
         s1.output(f"{output_prefix}.bed.gz")
         s1.output(f"{output_prefix}.bed.gz.tbi")
 
-
-    combined_output_file = f"{common_prefix}.bed"
-    print(f"Generating combined output file: {combined_output_file}")
+    concatenated_output_file = f"{common_prefix}.concatenated.bed"
+    print(f"Generating combined output file: {concatenated_output_file}")
     s2 = bp.new_step(
-        name="combine_job",
+        name="combine-step",
         step_number=2,
-        image=DOCKER_IMAGE,
+        image=STR_ANALYSIS_DOCKER_IMAGE,
         storage="20Gi",
         cpu=1,
         localize_by=Localize.COPY,
@@ -121,19 +127,48 @@ def main():
         output_dir=output_dir,
     )
 
-    for step in steps:
-        local_bed_path, _ = s2.use_previous_step_outputs_as_inputs(step)
-        s2.command(f"zcat {local_bed_path} >> {combined_output_file}")
+    #for step in steps:
+    #    local_bed_path, _ = s2.use_previous_step_outputs_as_inputs(step)
+    #    s2.command(f"zcat {local_bed_path} >> {combined_output_file}")
+    s2.command("set -ex")
+    s2.command(f"gcloud storage cp {os.path.join(output_dir, f'**/{common_prefix}.chr*.bed.gz')} .")
+    s2.command(f"ls {common_prefix}.chr*.bed.gz | wc -l")
 
-    s2.command(f"bgzip {combined_output_file}")
-    s2.command(f"tabix {combined_output_file}.gz")
+    s2.command(f"for i in {common_prefix}.chr*.bed.gz; do zcat $i >> {concatenated_output_file}; done")
+    s2.command(f"ls -lh {concatenated_output_file}")
+    s2.command(f"bgzip {concatenated_output_file}")
+    s2.command(f"tabix {concatenated_output_file}.gz")
+    s2.command(f"gunzip -c {concatenated_output_file}.gz | wc -l")
+    s2.output(f"{concatenated_output_file}.gz")
+    s2.output(f"{concatenated_output_file}.gz.tbi")
 
-    s2.output(f"{combined_output_file}.gz")
-    s2.output(f"{combined_output_file}.gz.tbi")
-    
+    s3 = bp.new_step(
+        name="merge-step",
+        step_number=3,
+        image=STR_ANALYSIS_DOCKER_IMAGE,
+        storage="20Gi",
+        cpu=1,
+        memory="highmem",
+        output_dir=output_dir,
+    )
+
+    local_concatenated_bed, _ = s3.use_previous_step_outputs_as_inputs(s2)
+    s3.command(f"""python3 -u -m str_analysis.merge_loci \
+        --verbose \
+        --output-format BED \
+        --output-prefix {common_prefix} \
+        {local_concatenated_bed}
+    """)
+
+    s3.command("ls -l")
+    s3.command(f"wc -l {common_prefix}.bed")
+
+    s3.output(f"{common_prefix}.bed.gz")
+    s3.output(f"{common_prefix}.bed.gz.tbi")
+
     files_to_download_when_done.extend([
-        (os.path.join(output_dir, f"{combined_output_file}.gz"), "results"),
-        (os.path.join(output_dir, f"{combined_output_file}.gz.tbi"), "results")
+        (os.path.join(output_dir, f"{common_prefix}.bed.gz"), "results"),
+        (os.path.join(output_dir, f"{common_prefix}.gz.tbi"), "results")
     ])
     bp.run()
 
