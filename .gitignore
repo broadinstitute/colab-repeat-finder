@@ -1,3 +1,13 @@
+benchmark
+
+*.log
+*.bed
+*.bed.gz
+
+*.fa
+*.fasta
+*.fai
+
 *.png
 *.svg
 

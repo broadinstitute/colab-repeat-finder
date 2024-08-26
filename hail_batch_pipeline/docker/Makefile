@@ -3,7 +3,7 @@ TAG = weisburd/colab-repeat-finder:latest
 all: build push
 
 build:
-	cd .. && docker build -t $(TAG) -f docker/Dockerfile .
+	cd ../.. && docker build -t $(TAG) -f hail_batch_pipeline/docker/Dockerfile .
 
 push:
 	docker push $(TAG)
