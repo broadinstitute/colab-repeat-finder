@@ -51,10 +51,11 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
         repeat_trackers[motif_size] = repeat_tracker
 
     end_position = interval_end - interval_start_0based
+    position_iter = range(len(input_sequence))
     if show_progress_bar:
-        input_sequence = tqdm.tqdm(input_sequence, unit=" bp", unit_scale=True, total=end_position)
+        position_iter = tqdm.tqdm(position_iter, unit=" bp", unit_scale=True, total=end_position)
 
-    for position in range(len(input_sequence)):
+    for position in position_iter:
         any_in_middle_of_repeat = False
         for repeat_tracker in repeat_trackers.values():
             repeat_tracker.advance()
@@ -126,8 +127,13 @@ def main():
         with open(output_bed_path, "wt") as bed_file:
             for fasta_entry in fasta_entries:
                 seq = fasta_entry.seq
+                seq_len = len(seq)
+                if args.interval_end > seq_len:
+                    args.interval_end = seq_len
+                if args.interval:
+                    seq_len = args.interval_end - args.interval_start_0based
                 chrom = fasta_entry.name
-                print(f"Processing {chrom} ({len(seq):,d} bp)")
+                print(f"Processing {chrom} ({seq_len:,d} bp)")
                 output_intervals = detect_repeats(
                     seq, args, verbose=args.verbose, show_progress_bar=args.show_progress_bar, debug=args.debug)
                 print(f"Found {len(output_intervals):,d} repeats")
