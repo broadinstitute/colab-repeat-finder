@@ -65,7 +65,7 @@ class RepeatFinderTests(unittest.TestCase):
 		motif = "A"
 		filter_settings.min_motif_size = 2
 		repeats = detect_repeats(7*motif, filter_settings)
-		self.assertEqual(repeats, [(0, 7, "AA")])
+		self.assertEqual(repeats, [])
 
 		motif1 = "A"
 		motif2 = "AGAC"

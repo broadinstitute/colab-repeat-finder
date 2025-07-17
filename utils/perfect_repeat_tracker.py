@@ -92,10 +92,51 @@ class PerfectRepeatTracker:
 			end = i + 1
 
 			previous_motif = self.output_intervals.get((start_0based, end))
-			if previous_motif is None or len(motif) < len(previous_motif):
-				self.output_intervals[(start_0based, end)] = motif
+			if previous_motif is not None and len(motif) > len(previous_motif):
+				return
+
+			if consists_of_perfect_repeats(motif):
+				return
+
+			self.output_intervals[(start_0based, end)] = motif
 
 	@property
 	def current_position(self):
 		return self._current_position
 
+
+def consists_of_perfect_repeats(sequence):
+	"""Check whether the given nucleotide sequence consists entirely of repeats of some smaller repeat unit
+    (eg. CAGCAGCAGCAGCAG = 5xCAG). If yes, return the shorter repeat unit. Otherwise, return None.
+
+    Args:
+        sequence (str): nucleotide sequence
+
+    Return:
+         the repeat unit or None if the input sequence does not consist of perfect repeats of a smaller repeat unit
+    """
+
+	# quickly check if the sequence consists of exact repeats of a 1bp, 2bp, or 3bp motif
+	if len(sequence) >= 2 and sequence == sequence[0]*len(sequence):
+		return sequence[0]
+	elif len(sequence) >= 4 and len(sequence) % 2 == 0 and sequence == sequence[:2]*(len(sequence)//2):
+		return sequence[:2]
+	elif len(sequence) >= 6 and len(sequence) % 3 == 0 and sequence == sequence[:3]*(len(sequence)//3):
+		return sequence[:3]
+
+	# find the smallest repeat unit that covers the entire sequence
+	repeat_unit_length = 4
+	while repeat_unit_length <= len(sequence)/2:
+		if len(sequence) % repeat_unit_length != 0:
+			repeat_unit_length += 1
+			continue
+
+		repeat_unit = sequence[:repeat_unit_length]
+		num_repeats = sequence.count(repeat_unit)
+		if num_repeats * repeat_unit_length == len(sequence):
+			return repeat_unit
+
+		repeat_unit_length += 1
+
+	# no repeat unit found in sequence
+	return None
