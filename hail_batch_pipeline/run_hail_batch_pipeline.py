@@ -29,10 +29,11 @@ def parse_args(batch_pipeline):
     p.add_argument("--min-span", type=int, default=9)
     p.add_argument("--min-repeats", type=int, default=3)
     p.add_argument("--min-motif-size", type=int, default=1)
-    p.add_argument("--max-motif-size", type=int, default=1_000) #default=18000//3)
+    p.add_argument("--max-motif-size", type=int, default=1_000)  #default=18000//3)
     p.add_argument("--use-nonpreemptibles", action="store_true")
     p.add_argument("--batch-size", help="Interval size in base pairs to process per job", type=int, default=500_000)
     p.add_argument("--output-prefix", default="hg38_repeats")
+    p.add_argument("--output-dir", default=OUTPUT_BASE_DIR)
     p.add_argument("--start-batch-i", type=int, help="Start processing from this batch", default=0)
     p.add_argument("-n", type=int, help="Run only this many batches")
 
@@ -66,7 +67,7 @@ def main():
         f"{args.output_prefix}.motifs_{args.min_motif_size}_to_{args.max_motif_size}bp"
         f".repeats_{args.min_repeats}x_and_spans_{args.min_span}bp"
     )
-    output_dir = os.path.join(OUTPUT_BASE_DIR, common_prefix)
+    output_dir = os.path.join(args.output_dir, common_prefix)
     output_paths_glob = os.path.join(output_dir, f"**/*.bed*")
     bp.precache_file_paths(output_paths_glob)
     steps = []
@@ -82,13 +83,13 @@ def main():
         s1 = bp.new_step(
             f"{output_prefix} [motifs: {args.min_motif_size}-{args.max_motif_size}]",
             arg_suffix=f"crf",
-            image=STR_ANALYSIS_DOCKER_IMAGE,
+            image=DOCKER_IMAGE,
             step_number=1,
             cpu=1,
             storage="5Gi",
             memory="standard",
             preemptible=not args.use_nonpreemptibles,
-            localize_by=Localize.COPY, #HAIL_BATCH_CLOUDFUSE,
+            localize_by=Localize.COPY, #Localize.GSUTIL_COPY, #HAIL_BATCH_CLOUDFUSE,
             delocalize_by=Delocalize.COPY,
             output_dir=output_dir)
 
@@ -127,7 +128,9 @@ def main():
         output_dir=output_dir,
     )
 
-    #for step in steps:
+    for s1 in steps:
+        s2.depends_on(s1)
+        
     #    local_bed_path, _ = s2.use_previous_step_outputs_as_inputs(step)
     #    s2.command(f"zcat {local_bed_path} >> {combined_output_file}")
     s2.command("set -ex")
@@ -168,7 +171,7 @@ def main():
 
     files_to_download_when_done.extend([
         (os.path.join(output_dir, f"{common_prefix}.bed.gz"), "results"),
-        (os.path.join(output_dir, f"{common_prefix}.gz.tbi"), "results")
+        (os.path.join(output_dir, f"{common_prefix}.bed.gz.tbi"), "results")
     ])
     bp.run()
 
