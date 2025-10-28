@@ -5,7 +5,7 @@ import re
 import tqdm
 
 from utils.perfect_repeat_tracker import PerfectRepeatTracker
-
+from utils.plot_utils import plot_results
 
 def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress_bar=False, debug=False):
     """Detect repeats in a given input sequence.
@@ -166,7 +166,7 @@ def main():
 
     if args.plot and interval_sequence:
         if len(interval_sequence) > 5_000:
-            print(f"Warning: The input sequence is too long ({len(sequence_to_plot):,d} bp). Skipping plot...")
+            print(f"Warning: The input sequence is too long ({len(interval_sequence):,d} bp). Skipping plot...")
         else:
             plot_results(interval_sequence, output_intervals, args.max_motif_size, args.plot)
 
