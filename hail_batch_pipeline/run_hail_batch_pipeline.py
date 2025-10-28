@@ -7,8 +7,8 @@ import hailtop.fs as hfs
 
 from step_pipeline import pipeline, Backend, Localize, Delocalize
 
-DOCKER_IMAGE = "weisburd/colab-repeat-finder@sha256:fd956adffeab6f49fbbdbc1930d7e6952a81e1ad450da3252ba1597e6fb6706a"
-STR_ANALYSIS_DOCKER_IMAGE = "weisburd/str-analysis@sha256:504a9ea2ec1143cc38ea6013bf4af7cc266f3e80b47703ad43ea78d425b83295"
+DOCKER_IMAGE = "weisburd/colab-repeat-finder@sha256:ce854aae2fb906de9b8d6e7dc877087f0d6b804de52339c80642a70a81b4be8c"
+STR_ANALYSIS_DOCKER_IMAGE = "weisburd/str-analysis@sha256:40eaad32db567bfde2267ef29c5e931abe69cf6eaefd35ff2316a75d08174151"
 
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)

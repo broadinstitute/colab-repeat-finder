@@ -9,7 +9,6 @@ RUN apt-get update && apt-get install -y \
 
 
 COPY utils /utils
-COPY repeat_finder.py /repeat_finder.py
 COPY perfect_repeat_finder.py /perfect_repeat_finder.py
 
 COPY requirements.txt /requirements.txt
