@@ -35,6 +35,12 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
     interval_start_0based = getattr(filter_settings, "interval_start_0based", 0)
     interval_end = getattr(filter_settings, "interval_end", len(input_sequence))
 
+    # skip any Ns at the beginning and end of the interval
+    while interval_start_0based < interval_end and input_sequence[interval_start_0based] == "N":
+        interval_start_0based += 1
+    while interval_end > interval_start_0based and input_sequence[interval_end - 1] == "N":
+        interval_end -= 1
+
     input_sequence = input_sequence[interval_start_0based:]
 
     # generate all intervals
@@ -110,7 +116,7 @@ def main():
         if args.interval:
             interval = re.split("[:-]", args.interval)
             if len(interval) != 3:
-                parser.error(f"Invalid --plot-interval format. Must be chrom:start_0based-end")
+                parser.error(f"Invalid --interval format. Must be chrom:start_0based-end")
             args.interval_chrom, args.interval_start_0based, args.interval_end = interval
             args.interval_start_0based = int(args.interval_start_0based)
             args.interval_end = int(args.interval_end)

@@ -50,7 +50,7 @@ class PerfectRepeatTracker:
 		if i >= len(seq) - period:
 			return False
 
-		if seq[i] == seq[i + period]:
+		if seq[i] == seq[i + period] and seq[i] != "N":
 			self._current_position += 1
 			self._run_length += 1
 			return True
