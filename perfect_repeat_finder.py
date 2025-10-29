@@ -34,14 +34,16 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
 
     interval_start_0based = getattr(filter_settings, "interval_start_0based", 0)
     interval_end = getattr(filter_settings, "interval_end", len(input_sequence))
+    input_sequence_length = len(input_sequence)
 
     # skip any Ns at the beginning and end of the interval
     while interval_start_0based < interval_end and input_sequence[interval_start_0based] == "N":
         interval_start_0based += 1
     while interval_end > interval_start_0based and input_sequence[interval_end - 1] == "N":
         interval_end -= 1
+        input_sequence_length -= 1
 
-    input_sequence = input_sequence[interval_start_0based:]
+    input_sequence = input_sequence[interval_start_0based:input_sequence_length]
 
     # generate all intervals
     output_intervals = {}
