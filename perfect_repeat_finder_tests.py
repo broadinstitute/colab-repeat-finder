@@ -70,14 +70,15 @@ class RepeatFinderTests(unittest.TestCase):
 		motif1 = "A"
 		motif2 = "AGAC"
 		motif3 = "AAC"
-		seq = 7*motif1 + 7*motif2 + 10*motif3
-		self.assertEqual(len(seq), 65)
+		seq = 7*motif1 + 7*motif2 + 10*motif3 + "N"*10
+
+		self.assertEqual(len(seq), 75)
 
 		filter_settings.min_motif_size = 2
 		filter_settings.max_motif_size = 10
 		repeats = detect_repeats(seq, filter_settings)
 		self.assertEqual(repeats, [
-			(0, 8, "AA"), (7, 36, "AGAC"), (33, 65, "ACA"),
+			(7, 36, "AGAC"), (33, 65, "ACA"),
 		], f"Error on sequence: {seq}. Got {repeats}")
 
 		filter_settings.min_motif_size = 1
@@ -102,6 +103,21 @@ class RepeatFinderTests(unittest.TestCase):
 				(0, len(left_motif)*10, left_motif),
 				(len(left_motif)*8 + 1, len(seq), shift_string_by(right_motif, -1)),
 			], f"Error on sequence: {seq}. Got {repeats}")
+
+		motif1 = "A"
+		motif2 = "AGAC"
+		motif3 = "AAC"
+		seq = "N"*10 + 7*motif1 + "N" + 7*motif2 + "NNNN" + 10*motif3 + "N"*10
+
+		self.assertEqual(len(seq), 90)
+
+		filter_settings.min_motif_size = 1
+		filter_settings.max_motif_size = 10
+		filter_settings.min_span = 7
+		repeats = detect_repeats(seq, filter_settings)
+		self.assertEqual(repeats, [
+			(10, 17, "A"), (18, 46, "AGAC"), (50, 80, "AAC"),
+		], f"Error on sequence: {seq}. Got {repeats}")
 
 
 	def test_perfect_repeats_with_interval(self):
