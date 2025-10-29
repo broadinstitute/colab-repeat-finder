@@ -13,9 +13,8 @@ STR_ANALYSIS_DOCKER_IMAGE = "weisburd/str-analysis@sha256:40eaad32db567bfde2267e
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-REFERENCE_GENOME_FASTA = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta"
-
-OUTPUT_BASE_DIR = f"gs://bw-proj/gnomad-bw/colab-repeat-finder/hg38"
+#REFERENCE_GENOME_FASTA = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta"
+REFERENCE_GENOME_FASTA = "gs://str-truth-set/hg38/ref/hg38.fa.gz"
 
 
 def run(cmd):
@@ -33,7 +32,7 @@ def parse_args(batch_pipeline):
     p.add_argument("--use-nonpreemptibles", action="store_true")
     p.add_argument("--batch-size", help="Interval size in base pairs to process per job", type=int, default=500_000)
     p.add_argument("--output-prefix", default="hg38_repeats")
-    p.add_argument("--output-dir", default=OUTPUT_BASE_DIR)
+    p.add_argument("--output-dir", default="gs://bw-proj/gnomad-bw/colab-repeat-finder/hg38")
     p.add_argument("--start-batch-i", type=int, help="Start processing from this batch", default=0)
     p.add_argument("-n", type=int, help="Run only this many batches")
 
@@ -96,7 +95,7 @@ def main():
         steps.append(s1)
 
         # process input files
-        local_fasta, _ = s1.inputs(REFERENCE_GENOME_FASTA, f"{REFERENCE_GENOME_FASTA}.fai")
+        local_fasta, _, _ = s1.inputs(REFERENCE_GENOME_FASTA, f"{REFERENCE_GENOME_FASTA}.fai", f"{REFERENCE_GENOME_FASTA}.gzi")
 
         s1.command("set -ex")
         s1.command(f"""time python3 /perfect_repeat_finder.py \
