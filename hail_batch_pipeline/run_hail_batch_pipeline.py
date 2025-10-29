@@ -13,9 +13,11 @@ STR_ANALYSIS_DOCKER_IMAGE = "weisburd/str-analysis@sha256:40eaad32db567bfde2267e
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-#REFERENCE_GENOME_FASTA = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta"
-REFERENCE_GENOME_FASTA = "gs://str-truth-set/hg38/ref/hg38.fa.gz"
+DEFAULT_BASE_OUTPUT_DIR = "gs://bw-proj/gnomad-bw/colab-repeat-finder"
 
+#REFERENCE_GENOME_FASTA = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta"
+HG38_REFERENCE_GENOME_FASTA = "gs://str-truth-set/hg38/ref/hg38.fa.gz"
+CHM13_REFERENCE_GENOME_FASTA = "gs://str-truth-set/chm13/ref/chm13v2.0.fa.gz"
 
 def run(cmd):
     print(cmd)
@@ -25,14 +27,15 @@ def run(cmd):
 def parse_args(batch_pipeline):
     p = batch_pipeline.get_config_arg_parser()
 
+    p.add_argument("--reference-genome", choices=["hg38", "chm13"], default="hg38")
     p.add_argument("--min-span", type=int, default=9)
     p.add_argument("--min-repeats", type=int, default=3)
     p.add_argument("--min-motif-size", type=int, default=1)
     p.add_argument("--max-motif-size", type=int, default=1_000)  #default=18000//3)
     p.add_argument("--use-nonpreemptibles", action="store_true")
     p.add_argument("--batch-size", help="Interval size in base pairs to process per job", type=int, default=500_000)
-    p.add_argument("--output-prefix", default="hg38_repeats")
-    p.add_argument("--output-dir", default="gs://bw-proj/gnomad-bw/colab-repeat-finder/hg38")
+    p.add_argument("--output-prefix", help="Output filename prefix")
+    p.add_argument("--output-dir", help="Google Cloud Storage output directory")
     p.add_argument("--start-batch-i", type=int, help="Start processing from this batch", default=0)
     p.add_argument("-n", type=int, help="Run only this many batches")
 
@@ -48,9 +51,21 @@ def main():
     args = parse_args(bp)
     p = bp.get_config_arg_parser()
 
+    if args.reference_genome == "hg38":
+        reference_genome_fasta = HG38_REFERENCE_GENOME_FASTA
+    elif args.reference_genome == "chm13":
+        reference_genome_fasta = CHM13_REFERENCE_GENOME_FASTA
+    else:
+        p.error(f"Invalid reference genome: {args.reference_genome}")
+
+    if not args.output_prefix:
+        args.output_prefix = f"{args.reference_genome}_repeats"
+    if not args.output_dir:
+        args.output_dir = os.path.join(DEFAULT_BASE_OUTPUT_DIR, args.reference_genome)
+        
     # compute batch sizes
     batches = []
-    with hfs.open(f"{REFERENCE_GENOME_FASTA}.fai") as fai_index_file:
+    with hfs.open(f"{reference_genome_fasta}.fai") as fai_index_file:
         for line in fai_index_file:
             fields = line.strip().split("\t")
             chrom = fields[0]
@@ -95,7 +110,7 @@ def main():
         steps.append(s1)
 
         # process input files
-        local_fasta, _, _ = s1.inputs(REFERENCE_GENOME_FASTA, f"{REFERENCE_GENOME_FASTA}.fai", f"{REFERENCE_GENOME_FASTA}.gzi")
+        local_fasta, _, _ = s1.inputs(reference_genome_fasta, f"{reference_genome_fasta}.fai", f"{reference_genome_fasta}.gzi")
 
         s1.command("set -ex")
         s1.command(f"""time python3 /perfect_repeat_finder.py \
@@ -114,7 +129,7 @@ def main():
         s1.output(f"{output_prefix}.bed.gz")
         s1.output(f"{output_prefix}.bed.gz.tbi")
 
-    concatenated_output_file = f"{common_prefix}.concatenated.bed"
+    concatenated_output_file = f"{common_prefix}.concatenated"
     print(f"Generating combined output file: {concatenated_output_file}")
     s2 = bp.new_step(
         name="combine-step",
@@ -130,19 +145,17 @@ def main():
     for s1 in steps:
         s2.depends_on(s1)
         
-    #    local_bed_path, _ = s2.use_previous_step_outputs_as_inputs(step)
-    #    s2.command(f"zcat {local_bed_path} >> {combined_output_file}")
     s2.command("set -ex")
     s2.command(f"gcloud storage cp {os.path.join(output_dir, f'**/{common_prefix}.chr*.bed.gz')} .")
     s2.command(f"ls {common_prefix}.chr*.bed.gz | wc -l")
 
-    s2.command(f"for i in {common_prefix}.chr*.bed.gz; do zcat $i >> {concatenated_output_file}; done")
-    s2.command(f"ls -lh {concatenated_output_file}")
-    s2.command(f"bgzip {concatenated_output_file}")
-    s2.command(f"tabix {concatenated_output_file}.gz")
-    s2.command(f"gunzip -c {concatenated_output_file}.gz | wc -l")
-    s2.output(f"{concatenated_output_file}.gz")
-    s2.output(f"{concatenated_output_file}.gz.tbi")
+    s2.command(f"for i in {common_prefix}.chr*.bed.gz; do zcat $i >> {concatenated_output_file}.unsorted.bed; done")
+    # sort the concatenated bed file
+    s2.command(f"sort -k1,1 -k2,2n {concatenated_output_file}.unsorted.bed | uniq | bgzip > {concatenated_output_file}.bed.gz")
+    s2.command(f"tabix {concatenated_output_file}.bed.gz")
+    s2.command(f"gunzip -c {concatenated_output_file}.bed.gz | wc -l")
+    s2.output(f"{concatenated_output_file}.bed.gz")
+    s2.output(f"{concatenated_output_file}.bed.gz.tbi")
 
     s3 = bp.new_step(
         name="merge-step",
@@ -163,7 +176,7 @@ def main():
     """)
 
     s3.command("ls -l")
-    s3.command(f"wc -l {common_prefix}.bed")
+    s3.command(f"gunzip -c {common_prefix}.bed.gz | wc -l")
 
     s3.output(f"{common_prefix}.bed.gz")
     s3.output(f"{common_prefix}.bed.gz.tbi")
