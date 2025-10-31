@@ -13,7 +13,6 @@ STR_ANALYSIS_DOCKER_IMAGE = "weisburd/str-analysis@sha256:40eaad32db567bfde2267e
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DEFAULT_BASE_OUTPUT_DIR = "gs://bw-proj/gnomad-bw/colab-repeat-finder"
 
 #REFERENCE_GENOME_FASTA = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta"
 HG38_REFERENCE_GENOME_FASTA = "gs://str-truth-set/hg38/ref/hg38.fa.gz"
@@ -61,7 +60,7 @@ def main():
     if not args.output_prefix:
         args.output_prefix = f"{args.reference_genome}_repeats"
     if not args.output_dir:
-        args.output_dir = os.path.join(DEFAULT_BASE_OUTPUT_DIR, args.reference_genome)
+        args.output_dir = f"gs://str-truth-set/{args.reference_genome}/ref/other/colab-repeat-finder/" 
         
     # compute batch sizes
     batches = []
