@@ -116,7 +116,6 @@ def plot_dot_plot(matrix, save_path=None, show=False, figure_size=None):
 
     if save_path:
         fig.savefig(save_path, dpi=fig.get_dpi(), bbox_inches="tight", pad_inches=0)
-        print(f"Saved image to {save_path}")
 
     plt.close(fig)
 
@@ -124,16 +123,21 @@ def plot_dot_plot(matrix, save_path=None, show=False, figure_size=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Plot dot plot for the given input sequence.")
     parser.add_argument("--image-size", "-w", type=float, help="Image width and height in inches")
+    parser.add_argument("--output-dir", "-d", default=".", help="optional output directory")
     parser.add_argument("--output-path", "-o", default="dot_plot.png", help="Output image path (PNG). Only used if a single input sequence is provided.")
     parser.add_argument("--filter-threshold", "-t", type=int, help="Minimum motif size", default=3)
     parser.add_argument("--show-filtered-pixels", action="store_true", help="Instead of hiding filtered-out pixels, show them in a different color")
     parser.add_argument("--show-plot", action="store_true", help="Show the image window before saving it to a file")
     parser.add_argument("-R", "--reference-fasta", help="Path to reference genome FASTA file")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Print verbose output")
     parser.add_argument("input_sequence", nargs="+", help="Nucleotide sequence(s) to plot, or BED file path(s), or interval(s) like chrom:start0based-end.")
     args = parser.parse_args()
 
     input_sequences = []
     output_filenames = []
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
+
     for i, seq in enumerate(args.input_sequence):
         invalid_chars = set(seq) - set("ACGT")
         if not invalid_chars:
@@ -141,9 +145,9 @@ if __name__ == "__main__":
 
             input_sequences.append(seq)
             if len(args.input_sequence) == 1:
-                output_filenames.append(args.output_path)
+                output_filenames.append(os.path.join(args.output_dir, args.output_path))
             else:
-                output_filenames.append(f"dot_plot_{i+1:03d}_of_{len(args.input_sequence)}.{len(seq)}bp_sequence.png")
+                output_filenames.append(os.path.join(args.output_dir, f"dot_plot_{i+1:03d}_of_{len(args.input_sequence)}.{len(seq)}bp_sequence.png"))
 
         else:
             if not "bed" in seq and not ":" in seq and not "-" in seq:
@@ -178,19 +182,26 @@ if __name__ == "__main__":
                 chrom = chrom.replace("chr", "")
                 seq = fasta_entries[f"chr{chrom}"][start_0based:end]                
                 input_sequences.append(seq)
-                output_filenames.append(f"dot_plot_{i+1:03d}_of_{len(intervals)}.chr{chrom}_{start_0based}-{end}.{len(seq)}bp_sequence.png")
+                output_filenames.append(os.path.join(args.output_dir, f"dot_plot_{i+1:03d}_of_{len(intervals)}.chr{chrom}_{start_0based}-{end}.{len(seq)}bp_sequence.png"))
 
     print(f"Loaded {len(intervals):,d} interval(s) from {args.reference_fasta}")
 
     for i, (seq, output_filename) in enumerate(zip(input_sequences, output_filenames)):
-        if len(input_sequences) > 1:
-            print(f"Generating dot plot for {len(seq)}bp sequence {i+1} of {len(input_sequences)}")
-        else:
-            print(f"Generating dot plot for {len(seq)}bp sequence")
+        if args.verbose:
+            if len(input_sequences) > 1:
+                print(f"Generating dot plot for {len(seq)}bp sequence {i+1} of {len(input_sequences)}")
+            else:
+                print(f"Generating dot plot for {len(seq)}bp sequence")
 
         matrix = generate_matrix(seq)
 
         filter_out_noise(matrix, set_noise_to=2 if args.show_filtered_pixels else 0, min_diagonal_run=args.filter_threshold)
 
         plot_dot_plot(matrix, save_path=output_filename, show=args.show_plot, figure_size=args.image_size)
+
+        if args.verbose or len(input_sequences) == 1:
+            print(f"Saved image to {output_filename} (sequence length {len(seq)}bp)")
+
+    print(f"Done generating {len(input_sequences):,d} dot plot(s)", f"in {args.output_dir} directory" if args.output_dir != "." else "")
+
 
