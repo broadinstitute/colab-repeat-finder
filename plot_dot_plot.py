@@ -8,8 +8,26 @@ Additional details:
 """
 
 import argparse
+import gzip
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
+import os
+from numpy import kaiser
+import pyfaidx
+
+def parse_interval(interval_string):
+    """Parses interval string like "chr1:12345-54321" and returns 3-tuple (chrom, start, end)"""
+
+    try:
+        tokens = interval_string.split(":")
+        chrom = ":".join(tokens[:-1])  # some super-contig names have : in them
+        start, end = map(int, tokens[-1].split("-"))
+    except Exception as e:
+        raise ValueError(f"Unable to parse interval: '{interval_string}': {e}")
+
+    return chrom, start, end
+
+
 
 def generate_matrix(sequence):
     """Return a square 2D list where entry (i,j) == 1 if s[i]==s[j], else 0.
@@ -106,22 +124,73 @@ def plot_dot_plot(matrix, save_path=None, show=False, figure_size=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Plot dot plot for the given input sequence.")
     parser.add_argument("--image-size", "-w", type=float, help="Image width and height in inches")
-    parser.add_argument("--output-path", "-o", default="dot_plot.png", help="Output image path (PNG)")
+    parser.add_argument("--output-path", "-o", default="dot_plot.png", help="Output image path (PNG). Only used if a single input sequence is provided.")
     parser.add_argument("--filter-threshold", "-t", type=int, help="Minimum motif size", default=3)
-    parser.add_argument("--show-filtered", action="store_true", help="Instead of hiding filtered-out pixels, show them in a different color")
-    parser.add_argument("--show-plot", action="store_true", help="Show the image window")
-    parser.add_argument("input_sequence", help="Sequence to plot")
+    parser.add_argument("--show-filtered-pixels", action="store_true", help="Instead of hiding filtered-out pixels, show them in a different color")
+    parser.add_argument("--show-plot", action="store_true", help="Show the image window before saving it to a file")
+    parser.add_argument("-R", "--reference-fasta", help="Path to reference genome FASTA file")
+    parser.add_argument("input_sequence", nargs="+", help="Nucleotide sequence(s) to plot, or BED file path(s), or interval(s) like chrom:start0based-end.")
     args = parser.parse_args()
 
-    seq = args.input_sequence
-    invalid_chars = set(seq) - set("ACGT")
-    if invalid_chars:
-        parser.error(f"Error: input sequence contains invalid characters {', '.join(sorted(invalid_chars))}; only A,C,G,T allowed.")
+    input_sequences = []
+    output_filenames = []
+    for i, seq in enumerate(args.input_sequence):
+        invalid_chars = set(seq) - set("ACGT")
+        if not invalid_chars:
+            # this is a literal nucleotide sequence
 
-    print(f"Generating dot plot for {len(seq)}bp sequence")
-    matrix = generate_matrix(seq)
+            input_sequences.append(seq)
+            if len(args.input_sequence) == 1:
+                output_filenames.append(args.output_path)
+            else:
+                output_filenames.append(f"dot_plot_{i+1:03d}_of_{len(args.input_sequence)}.{len(seq)}bp_sequence.png")
 
-    filter_out_noise(matrix, set_noise_to=2 if args.show_filtered else 0, min_diagonal_run=args.filter_threshold)
+        else:
+            if not "bed" in seq and not ":" in seq and not "-" in seq:
+                parser.error(f"Error: {seq} is not a valid nucleotide sequence, BED file path, or interval")
 
-    plot_dot_plot(matrix, save_path=args.output_path, show=args.show_plot, figure_size=args.image_size)
+            if not args.reference_fasta:
+                parser.error("Error: --reference-fasta is required when the input is a BED file or interval")
+
+            intervals = []
+            if "bed" in seq:
+                bed_path = seq
+                if not os.path.isfile(bed_path):
+                    parser.error(f"Error: {bed_path} file not found")
+                            
+                fopen = gzip.open if bed_path.endswith("gz") else open
+                with fopen(bed_path, "rt") as bed_file:
+                    for line_i, line in enumerate(bed_file):
+                        fields = line.strip().split("\t")
+                        if len(fields) < 3:
+                            parser.error(f"Error: {bed_path} line #{line_i+1} is invalid: '{line.strip()}'")
+                        
+                        chrom, start_0based, end = fields[:3]
+                        intervals.append((chrom, int(start_0based), int(end)))
+            elif ":" in seq and "-" in seq:
+                chrom, start_0based, end = parse_interval(seq)
+                intervals.append((chrom, int(start_0based), int(end)))
+            else:
+                parser.error(f"Error: {seq} is not a valid interval or BED file")
+
+            fasta_entries = pyfaidx.Fasta(args.reference_fasta, as_raw=True, one_based_attributes=False, sequence_always_upper=True)
+            for i, (chrom, start_0based, end) in enumerate(intervals):
+                chrom = chrom.replace("chr", "")
+                seq = fasta_entries[f"chr{chrom}"][start_0based:end]                
+                input_sequences.append(seq)
+                output_filenames.append(f"dot_plot_{i+1:03d}_of_{len(intervals)}.chr{chrom}_{start_0based}-{end}.{len(seq)}bp_sequence.png")
+
+    print(f"Loaded {len(intervals):,d} interval(s) from {args.reference_fasta}")
+
+    for i, (seq, output_filename) in enumerate(zip(input_sequences, output_filenames)):
+        if len(input_sequences) > 1:
+            print(f"Generating dot plot for {len(seq)}bp sequence {i+1} of {len(input_sequences)}")
+        else:
+            print(f"Generating dot plot for {len(seq)}bp sequence")
+
+        matrix = generate_matrix(seq)
+
+        filter_out_noise(matrix, set_noise_to=2 if args.show_filtered_pixels else 0, min_diagonal_run=args.filter_threshold)
+
+        plot_dot_plot(matrix, save_path=output_filename, show=args.show_plot, figure_size=args.image_size)
 
