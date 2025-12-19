@@ -126,11 +126,12 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", "-d", default=".", help="optional output directory")
     parser.add_argument("--output-path", "-o", default="dot_plot.png", help="Output image path (PNG). Only used if a single input sequence is provided.")
     parser.add_argument("--filter-threshold", "-t", type=int, help="Minimum motif size", default=3)
+    parser.add_argument("--padding", "-p", type=int, help="Add this many bases of flanking sequence around the sequence", default=0)
     parser.add_argument("--show-filtered-pixels", action="store_true", help="Instead of hiding filtered-out pixels, show them in a different color")
     parser.add_argument("--show-plot", action="store_true", help="Show the image window before saving it to a file")
     parser.add_argument("-R", "--reference-fasta", help="Path to reference genome FASTA file")
     parser.add_argument("--verbose", "-v", action="store_true", help="Print verbose output")
-    parser.add_argument("input_sequence", nargs="+", help="Nucleotide sequence(s) to plot, or BED file path(s), or interval(s) like chrom:start0based-end.")
+    parser.add_argument("input_sequence_or_intervals_or_bed_files", nargs="+", help="Nucleotide sequence(s) to plot, or BED file path(s), or interval(s) like chrom:start0based-end.")
     args = parser.parse_args()
 
     input_sequences = []
@@ -138,16 +139,16 @@ if __name__ == "__main__":
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    for i, seq in enumerate(args.input_sequence):
+    for i, seq in enumerate(args.input_sequence_or_intervals_or_bed_files):
         invalid_chars = set(seq) - set("ACGT")
         if not invalid_chars:
             # this is a literal nucleotide sequence
 
             input_sequences.append(seq)
-            if len(args.input_sequence) == 1:
+            if len(args.input_sequence_or_intervals_or_bed_files) == 1:
                 output_filenames.append(os.path.join(args.output_dir, args.output_path))
             else:
-                output_filenames.append(os.path.join(args.output_dir, f"dot_plot_{i+1:03d}_of_{len(args.input_sequence)}.{len(seq)}bp_sequence.png"))
+                output_filenames.append(os.path.join(args.output_dir, f"dot_plot_{i+1:03d}_of_{len(args.input_sequence_or_intervals_or_bed_files)}.{len(seq)}bp_sequence.png"))
 
         else:
             if not "bed" in seq and not ":" in seq and not "-" in seq:
@@ -170,10 +171,10 @@ if __name__ == "__main__":
                             parser.error(f"Error: {bed_path} line #{line_i+1} is invalid: '{line.strip()}'")
                         
                         chrom, start_0based, end = fields[:3]
-                        intervals.append((chrom, int(start_0based), int(end)))
+                        intervals.append((chrom, int(start_0based) - args.padding, int(end) + args.padding))
             elif ":" in seq and "-" in seq:
                 chrom, start_0based, end = parse_interval(seq)
-                intervals.append((chrom, int(start_0based), int(end)))
+                intervals.append((chrom, int(start_0based) - args.padding, int(end) + args.padding))
             else:
                 parser.error(f"Error: {seq} is not a valid interval or BED file")
 
