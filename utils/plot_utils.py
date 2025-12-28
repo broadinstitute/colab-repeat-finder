@@ -1,4 +1,3 @@
-import zlib
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 
@@ -71,7 +70,6 @@ def plot_results(input_sequence, output_intervals, max_motif_size, output_path):
 	for start_0based, end, motif in output_intervals:
 		row = len(motif) - 1
 		for i in range(start_0based, end + 1):
-			#matrix[row][i] = zlib.adler32(bytes(motif, encoding="utf-8")) % 10 + 1
 			matrix[row][i] = abs(hash(bytes(motif, encoding="utf-8")) % 10 + 1)
 
 	plot_periodicity_matrix(matrix, output_path)

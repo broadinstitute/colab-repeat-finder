@@ -199,7 +199,7 @@ class RepeatTracker:
 			# repeat unit. This becomes important when allowing interruptions.
 			self.previous_output_interval is not None and end - self.previous_output_interval[1] < self.motif_size
 		):
-			if self.verbose: print(f"==> No, this interval signicantly overlaps another, previously detected repeat sequence.")
+			if self.verbose: print(f"==> No, this interval significantly overlaps another, previously detected repeat sequence.")
 			self.reset_traversal()
 			return
 

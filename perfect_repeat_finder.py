@@ -17,8 +17,8 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
         show_progress_bar (bool): Show a progress bar while traversing the input sequence.
         debug (bool): Print debug output.
 
-    Return:
-        list: A list of (start_0based, end, motif) tuples reprsenting all detected repeats in the input sequence.
+    Returns:
+        list: A list of (start_0based, end, motif) tuples representing all detected repeats in the input sequence.
     """
     if not getattr(filter_settings, "min_motif_size") or filter_settings.min_motif_size < 1:
         raise ValueError(f"min_motif_size is set to {filter_settings.min_motif_size}. It must be at least 1.")

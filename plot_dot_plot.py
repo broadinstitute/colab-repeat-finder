@@ -12,7 +12,6 @@ import gzip
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import os
-from numpy import kaiser
 import pyfaidx
 
 def parse_interval(interval_string):
@@ -151,7 +150,7 @@ if __name__ == "__main__":
                 output_filenames.append(os.path.join(args.output_dir, f"dot_plot_{i+1:03d}_of_{len(args.input_sequence_or_intervals_or_bed_files)}.{len(seq)}bp_sequence.png"))
 
         else:
-            if not "bed" in seq and not ":" in seq and not "-" in seq:
+            if "bed" not in seq and ":" not in seq and "-" not in seq:
                 parser.error(f"Error: {seq} is not a valid nucleotide sequence, BED file path, or interval")
 
             if not args.reference_fasta:
@@ -181,11 +180,11 @@ if __name__ == "__main__":
             fasta_entries = pyfaidx.Fasta(args.reference_fasta, as_raw=True, one_based_attributes=False, sequence_always_upper=True)
             for i, (chrom, start_0based, end) in enumerate(intervals):
                 chrom = chrom.replace("chr", "")
-                seq = fasta_entries[f"chr{chrom}"][start_0based:end]                
+                seq = fasta_entries[f"chr{chrom}"][start_0based:end]
                 input_sequences.append(seq)
                 output_filenames.append(os.path.join(args.output_dir, f"dot_plot_{i+1:03d}_of_{len(intervals)}.chr{chrom}_{start_0based}-{end}.{len(seq)}bp_sequence.png"))
 
-    print(f"Loaded {len(intervals):,d} interval(s) from {args.reference_fasta}")
+            print(f"Loaded {len(intervals):,d} interval(s) from {args.reference_fasta}")
 
     for i, (seq, output_filename) in enumerate(zip(input_sequences, output_filenames)):
         if args.verbose:

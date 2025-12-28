@@ -1,8 +1,8 @@
 """Original code for the RepeatTracker class before it was refactored to allow detection of interrupted repeats"""
 
 class PerfectRepeatTracker:
-	"""This class tracks repeats of a single motif size in a given input sequence. It outputs all perfect repeats of
-	this that pass filter criteria while scanning the input sequence from left to right"""
+	"""This class tracks repeats of a single motif size in a given input sequence. It outputs all perfect repeats
+	that pass filter criteria while scanning the input sequence from left to right"""
 
 	def __init__(self, motif_size, min_repeats, min_span, input_sequence, output_intervals, verbose=False):
 		"""Initialize a RepeatTracker object.
