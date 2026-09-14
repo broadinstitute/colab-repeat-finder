@@ -136,9 +136,8 @@ def main():
             for fasta_entry in fasta_entries:
                 seq = fasta_entry.seq
                 seq_len = len(seq)
-                if args.interval_end > seq_len:
-                    args.interval_end = seq_len
                 if args.interval:
+                    args.interval_end = min(args.interval_end, seq_len)
                     seq_len = args.interval_end - args.interval_start_0based
                 chrom = fasta_entry.name
                 print(f"Processing {chrom} ({seq_len:,d} bp)")

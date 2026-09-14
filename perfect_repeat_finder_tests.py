@@ -1,6 +1,10 @@
 import argparse
 import json
+import subprocess
+import sys
+import tempfile
 import unittest
+from pathlib import Path
 
 from utils.plot_utils import shift_string_by
 from perfect_repeat_finder import detect_repeats
@@ -142,3 +146,21 @@ class RepeatFinderTests(unittest.TestCase):
 		repeats = detect_repeats(seq, filter_settings)
 		self.assertEqual(repeats, [(5, 8, "G"), (18, 33, "CAG")], f"Error on sequence: {seq}")
 
+
+	def test_fasta_input_without_interval(self):
+		"""Regression test for https://github.com/broadinstitute/colab-repeat-finder/issues/4"""
+		contigs = {
+			"ctg1": "NNNNN" + "GATTACAT" + "CAG"*10 + "TTGACCGT" + "nnnnn",
+			"ctg2": "N"*20,
+			"ctg3": "A"*12 + "CTGT",
+		}
+		with tempfile.TemporaryDirectory() as temp_dir:
+			fasta_path = Path(temp_dir) / "assembly.fa"
+			fasta_path.write_text("".join(f">{name}\n{seq}\n" for name, seq in contigs.items()))
+			subprocess.run(
+				[sys.executable, str(Path(__file__).resolve().parent / "perfect_repeat_finder.py"),
+				 "-max", "6", "-o", "out", str(fasta_path)],
+				cwd=temp_dir, check=True, capture_output=True)
+			bed_rows = (Path(temp_dir) / "out.bed").read_text().splitlines()
+
+		self.assertEqual(bed_rows, ["ctg1\t13\t43\tCAG", "ctg3\t0\t12\tA"])
