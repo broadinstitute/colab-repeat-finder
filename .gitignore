@@ -12,6 +12,7 @@ benchmark
 *.svg
 
 *.tsv
+*.json
 *.gz*
 
 __pycache__/
@@ -34,3 +35,9 @@ Cargo.lock
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+# Claude Code
+.claude/
+.code_review_local/
+.memory/
+CLAUDE.md
