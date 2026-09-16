@@ -4,7 +4,7 @@ class PerfectRepeatTracker:
 	"""This class tracks repeats of a single motif size in a given input sequence. It outputs all perfect repeats
 	that pass filter criteria while scanning the input sequence from left to right"""
 
-	def __init__(self, motif_size, min_repeats, min_span, input_sequence, output_intervals, verbose=False):
+	def __init__(self, motif_size, min_repeats, min_span, input_sequence, output_intervals):
 		"""Initialize a RepeatTracker object.
 
 		Args:
@@ -14,7 +14,6 @@ class PerfectRepeatTracker:
 			input_sequence (str): The input sequence.
 			output_intervals (dict): A dictionary to store detected repeats. The key is (start_0based, end) and the
 				value is the detected motif.
-			verbose (bool): If True, print debug information to the console.
 		"""
 
 		self.motif_size = motif_size
@@ -22,23 +21,9 @@ class PerfectRepeatTracker:
 		self.min_span = min_span
 		self.input_sequence = input_sequence
 		self.output_intervals = output_intervals
-		self.verbose = verbose
 
 		self._current_position = 0   # 0-based position in the input sequence
 		self._run_length = 1  # number of bases added so far to the current repeat interval
-
-	def log(self, message, force=False):
-		if not force and not self.verbose:
-			return
-
-		start_0based = max(0, self._current_position - self._run_length)
-		motif = self.input_sequence[start_0based : start_0based + self.motif_size]
-		print(f"{message:100s}  || PerfectRepeatTracker:"
-			  f"{len(self.input_sequence):,d}bp  [{start_0based}:{self._current_position+1}], "
-			  f"run={self._run_length}, "
-			  f"i0={self._current_position}: "
-			  f"{(self._current_position - start_0based)/len(motif):0.2f} x {motif} "
-			  f"==> {self.input_sequence[start_0based : self._current_position+1] if self._current_position - start_0based < 300 else '[too long]'}")
 
 	def advance(self):
 		"""Increment current position within the input sequence while updating internal state and recording any detected repeats"""
@@ -60,9 +45,10 @@ class PerfectRepeatTracker:
 		self._run_length = 1
 		return True
 
-	def is_in_middle_of_repeat(self):
-		"""Check if the current position is in the middle of a repeat"""
-		return self._run_length >= self.motif_size + 1
+	def current_run_start_0based(self):
+		"""Return the 0-based start position of the run that the tracker is currently extending. Any repeat this
+		tracker outputs in the future will start at or after this position."""
+		return self._current_position - self._run_length + 1
 
 	def done(self):
 		"""Output the last interval if it passes filters"""
@@ -84,7 +70,7 @@ class PerfectRepeatTracker:
 			return
 
 		if self._run_length + period - 1 >= self.min_span and self._run_length + period - 1 >= self.min_repeats * period:
-			while i < len(seq) - 1 and seq[i+1] == seq[i+1 - period]:
+			while i < len(seq) - 1 and i + 1 - period >= 0 and seq[i+1] == seq[i+1 - period]:
 				self._run_length += 1
 				i += 1
 

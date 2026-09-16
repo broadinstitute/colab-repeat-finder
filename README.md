@@ -1,4 +1,4 @@
-[**perfect_repeat_finder.py**](python/perfect_repeat_finder.py) is a tool that takes a nucleotide sequence or FASTA file as input, finds all perfect tandem repeats (ie. those without interruptions) that pass user-defined criteria, and outputs their exact genomic coordinates and repeat motifs to a BED file.
+[**perfect_repeat_finder.py**](perfect_repeat_finder.py) is a tool that takes a nucleotide sequence or FASTA file as input, finds all perfect tandem repeats (ie. those without interruptions) that pass user-defined criteria, and outputs their exact genomic coordinates and repeat motifs to a BED file (or a TSV file when the input is a nucleotide sequence instead of a FASTA file).
 
 *additional tools are under development*
 
@@ -6,7 +6,7 @@
 Example command-line:
 
 ```
-python3 python/perfect_repeat_finder.py \
+python3 perfect_repeat_finder.py \
   --min-span 9 \
   --min-repeats 3 \
   --min-motif-size 2 \
@@ -16,7 +16,7 @@ python3 python/perfect_repeat_finder.py \
   /path/to/hg38.fa
 ```
 
-It takes 55 seconds and detects all 63,738 perfect repeats in the first 10Mb of chr1 that pass the following criteria:  
+It takes 15 seconds and detects all 12,658 perfect repeats in the first 10Mb of chr1 that pass the following criteria:  
 - span at least 9bp from start to end
 - include at least 3 perfect repeats of some motif
 - have 2bp ≤ motif size ≤ 6bp
@@ -28,12 +28,12 @@ Example BED output file:
 
 ```
 ...
-chr1	10397	10442	CCCTAA
-chr1	10440	10468	CCCTAA
-chr1	10485	10498	GCCC
-chr1	10629	10635	GC
-chr1	10652	10658	AG
-chr1	10658	10664	GC
+chr22	15168968	15168977	AC
+chr22	15199683	15199692	AC
+chr22	15200535	15200544	AC
+chr22	15205048	15205086	AATA
+chr22	15212438	15212447	AG
+chr22	15213502	15213523	ATT
 ...
 ```
 ---
@@ -48,12 +48,12 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   -i INTERVAL, --interval INTERVAL
-                        Only consider sequence from this interval (chrom:start_0based-end). (default: None)
+                        Only consider sequence from this interval (chrom:start_0based-end). A repeat that starts inside the interval is reported in full even if it extends past the interval's end, but a repeat that begins before the interval is truncated to the portion from the interval's start onward, and may be reported with a different (rotated) motif as a result. (default: None)
   -p PLOT, --plot PLOT  Write out a plot with this filename. (default: None)
   -o OUTPUT_PREFIX, --output-prefix OUTPUT_PREFIX
-                        The output filename prefix for the output TSV file. If the input is a FASTA file, a BED file will also be generated. (default: None)
+                        The output filename prefix. Results are written to <prefix>.bed if the input is a FASTA file, or to <prefix>.tsv if it's a nucleotide sequence. (default: None)
   --verbose             Print verbose output. (default: False)
-  --debug               Print debugging output. (default: False)
+  --debug               Currently identical to --verbose. (default: False)
   --show-progress-bar   Show progress bar. (default: False)
 
 Repeat Filters:

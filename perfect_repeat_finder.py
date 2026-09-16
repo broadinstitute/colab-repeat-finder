@@ -15,7 +15,7 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
         filter_settings (Namespace): Filter settings from command-line args.
         verbose (bool): Print verbose output for debugging.
         show_progress_bar (bool): Show a progress bar while traversing the input sequence.
-        debug (bool): Print debug output.
+        debug (bool): Currently identical to verbose; print verbose output for debugging.
 
     Returns:
         list: A list of (start_0based, end, motif) tuples representing all detected repeats in the input sequence.
@@ -64,21 +64,29 @@ def detect_repeats(input_sequence, filter_settings, verbose=False, show_progress
         position_iter = tqdm.tqdm(position_iter, unit=" bp", unit_scale=True, total=end_position)
 
     for position in position_iter:
-        any_in_middle_of_repeat = False
         for repeat_tracker in repeat_trackers.values():
             repeat_tracker.advance()
-            any_in_middle_of_repeat = repeat_tracker.is_in_middle_of_repeat() or any_in_middle_of_repeat
 
-        # if one of the repeat trackers is in the middle of a repeat, keep processing past the end of the interval
-        if position > end_position and not any_in_middle_of_repeat:
+        # keep processing past the end of the interval until every repeat that started inside the interval has ended
+        if position + 1 >= end_position and all(
+                repeat_tracker.current_run_start_0based() >= end_position for repeat_tracker in repeat_trackers.values()):
             break
 
     for repeat_tracker in repeat_trackers.values():
-        if interval_end == len(input_sequence):
+        if interval_end == input_sequence_length:
             assert not repeat_tracker.advance(), f"{repeat_tracker.motif_size}bp motif RepeatTracker did not reach end of the sequence"
         repeat_tracker.done()
 
-    return [(start_0based + interval_start_0based, end + interval_start_0based, motif) for (start_0based, end), motif in sorted(output_intervals.items())]
+    # drop repeats that start after the interval (they're only seen because processing continued past its end)
+    repeats = [
+        (start_0based + interval_start_0based, end + interval_start_0based, motif)
+        for (start_0based, end), motif in sorted(output_intervals.items()) if start_0based < end_position
+    ]
+    if verbose or debug:
+        for start_0based, end, motif in repeats:
+            print(f"Found {(end - start_0based) / len(motif):0.1f} x {motif} at {start_0based}-{end}")
+
+    return repeats
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -88,12 +96,18 @@ def main():
     group.add_argument("--min-repeats", default=3, type=int, help="The minimum number of repeats to look for.")
     group.add_argument("--min-span", default=9, type=int, help="The repeats should span at least this many consecutive "
                                                                "bases in the input sequence.")
-    parser.add_argument("-i", "--interval", help="Only consider sequence from this interval (chrom:start_0based-end).")
+    parser.add_argument("-i", "--interval", help="Only consider sequence from this interval "
+                                                "(chrom:start_0based-end). A repeat that starts inside the interval is "
+                                                "reported in full even if it extends past the interval's end, but a "
+                                                "repeat that begins before the interval is truncated to the portion "
+                                                "from the interval's start onward, and may be reported with a "
+                                                "different (rotated) motif as a result.")
     parser.add_argument("-p", "--plot", help="Write out a plot with this filename.")
-    parser.add_argument("-o", "--output-prefix", help="The output filename prefix for the output TSV file. If the input "
-                                                      "is a FASTA file, a BED file will also be generated.")
+    parser.add_argument("-o", "--output-prefix", help="The output filename prefix. Results are written to <prefix>.bed "
+                                                      "if the input is a FASTA file, or to <prefix>.tsv if it's a "
+                                                      "nucleotide sequence.")
     parser.add_argument("--verbose", action="store_true", help="Print verbose output.")
-    parser.add_argument("--debug", action="store_true", help="Print debugging output.")
+    parser.add_argument("--debug", action="store_true", help="Currently identical to --verbose.")
     parser.add_argument("--show-progress-bar", action="store_true", help="Show progress bar.")
     parser.add_argument("input_sequence", help="The nucleotide sequence, or a FASTA file path")
 
@@ -110,11 +124,12 @@ def main():
 
     interval_sequence = None
     if os.path.isfile(args.input_sequence):
+        if args.plot and not args.interval:
+            parser.error("--plot requires --interval when the input is a FASTA file.")
         if not args.output_prefix:
-            args.output_prefix = re.sub(".fa(sta)?(.gz)?", "", args.input_sequence)
+            args.output_prefix = os.path.basename(re.sub(r"\.(fa|fasta|fna)(\.b?gz)?$", "", args.input_sequence))
 
-        output_bed_path = f"{os.path.basename(args.output_prefix)}.bed"
-        fasta_entries = pyfastx.Fasta(args.input_sequence)
+        output_bed_path = f"{args.output_prefix}.bed"
         if args.interval:
             interval = re.split("[:-]", args.interval)
             if len(interval) != 3:
@@ -123,23 +138,23 @@ def main():
             args.interval_start_0based = int(args.interval_start_0based)
             args.interval_end = int(args.interval_end)
 
-            # iterate over chromosomes in the FASTA file
-            if args.interval_chrom not in fasta_entries:
+            # build an index so the requested chromosome can be looked up directly, without scanning preceding contigs
+            fasta_index = pyfastx.Fasta(args.input_sequence)
+            if args.interval_chrom not in fasta_index:
                 parser.error(f"Chromosome {args.interval_chrom} not found in the input FASTA file")
+            chrom_sequence = fasta_index[args.interval_chrom].seq
 
-            chrom_sequence = fasta_entries[args.interval_chrom].seq
-            fasta_entries = [
-                argparse.Namespace(name=args.interval_chrom, seq=chrom_sequence)
-            ]
+            fasta_entries = [(args.interval_chrom, chrom_sequence)]
+        else:
+            # read (name, sequence) tuples without building an index, since contigs are processed in file order
+            fasta_entries = pyfastx.Fasta(args.input_sequence, build_index=False)
 
         with open(output_bed_path, "wt") as bed_file:
-            for fasta_entry in fasta_entries:
-                seq = fasta_entry.seq
+            for chrom, seq in fasta_entries:
                 seq_len = len(seq)
                 if args.interval:
                     args.interval_end = min(args.interval_end, seq_len)
                     seq_len = args.interval_end - args.interval_start_0based
-                chrom = fasta_entry.name
                 print(f"Processing {chrom} ({seq_len:,d} bp)")
                 output_intervals = detect_repeats(
                     seq, args, verbose=args.verbose, show_progress_bar=args.show_progress_bar, debug=args.debug)
@@ -148,6 +163,14 @@ def main():
                     bed_file.write("\t".join([chrom, str(start_0based), str(end), motif]) + "\n")
 
         print(f"Wrote results to {output_bed_path}")
+
+        if args.interval:
+            # for plotting, make repeat coordinates relative to the interval and clip them to it
+            interval_sequence = chrom_sequence[args.interval_start_0based:args.interval_end]
+            output_intervals = [
+                (start_0based - args.interval_start_0based, min(end, args.interval_end) - args.interval_start_0based, motif)
+                for start_0based, end, motif in output_intervals
+            ]
 
     elif set(args.input_sequence.upper()) <= set("ACGTN"):
         # process nucleotide sequence specified on the command line
@@ -159,7 +182,8 @@ def main():
             args.output_prefix = "repeats"
         output_tsv_path = f"{args.output_prefix}.tsv"
 
-        output_intervals = detect_repeats(args.input_sequence, args)
+        output_intervals = detect_repeats(
+            args.input_sequence, args, verbose=args.verbose, show_progress_bar=args.show_progress_bar, debug=args.debug)
         print(f"Found {len(output_intervals):,d} repeats")
 
         with open(output_tsv_path, "wt") as tsv_file:

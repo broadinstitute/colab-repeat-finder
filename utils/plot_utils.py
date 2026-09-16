@@ -1,3 +1,5 @@
+import zlib
+
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 
@@ -18,15 +20,15 @@ def get_period_matrix(min_motif_size, max_motif_size, input_sequence):
 		for column in range(len(input_sequence) - period):
 			if input_sequence[column] == input_sequence[column + period]:
 				# set the matrix value to a hash that stays the same as long as the motif is the same
-				value = abs(hash(bytes(shift_string_by(input_sequence[column:column + period], column % period), encoding="utf-8")))
+				value = zlib.crc32(bytes(shift_string_by(input_sequence[column:column + period], column % period), encoding="utf-8"))
 				matrix[row][column] = value
 
 	return matrix
 
 
 
-def plot_periodicity_matrix(periodicity_matrix, output_path):
-	
+def plot_periodicity_matrix(periodicity_matrix, output_path, score_denominator=None):
+
 	matrix_width = len(periodicity_matrix[0])
 	fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(10, 8))
 	cmap = ListedColormap(['#F3F3F3'] + list(plt.get_cmap("Pastel2", 12).colors))
@@ -35,17 +37,24 @@ def plot_periodicity_matrix(periodicity_matrix, output_path):
 	#ax1.set_xticks(range(5, matrix_width + 1, 5), minor=True)
 	#ax1.set_xticklabels([str(i + 1) for i in range(10, matrix_width, 10)])
 	#ax1.set_xticks(range(matrix_width), minor=True)
-	#ax1.set_yticks(range(len(periodicity_matrix)))
-	#ax1.set_yticklabels([str(i + 1) for i in range(len(periodicity_matrix))])
+	ax1.set_yticks(range(len(periodicity_matrix)))
+	ax1.set_yticklabels([str(i + 1) for i in range(len(periodicity_matrix))])
 	ax1.set_xlabel("Input sequence position")
 	ax1.set_ylabel("Period")
 
 	scores = [sum([1 for _ in row if _ > 0]) for row in periodicity_matrix]
 	periods = list(range(1, len(scores) + 1))
-	scores = [scores[i]/(matrix_width - periods[i] + 1) for i in range(len(scores))]
+	if score_denominator is None:
+		# default: normalize by the number of motif-sized windows compared at this period
+		scores = [scores[i]/(matrix_width - periods[i] + 1) for i in range(len(scores))]
+		ylabel = "Fraction of matches"
+	else:
+		# the matrix marks whole covered bases rather than per-window matches, so normalize by sequence length instead
+		scores = [scores[i]/score_denominator for i in range(len(scores))]
+		ylabel = "Fraction of bases covered"
 	ax2.bar(periods, scores)
 	ax2.set_xticks(periods)
-	ax2.set_ylabel("Fraction of matches")
+	ax2.set_ylabel(ylabel)
 	ax2.set_xlabel("Period")
 
 	plt.savefig(output_path)
@@ -66,10 +75,14 @@ def plot_results(input_sequence, output_intervals, max_motif_size, output_path):
 	plt.rcParams['figure.figsize'] = [16.5, 5]
 	plt.rcParams['font.size'] = 12
 
-	matrix = [[0 for _ in range(len(input_sequence))] for _ in range(max_motif_size)]
+	# a motif can't be longer than the sequence, and a row for each longer period would divide by zero when plotted
+	matrix = [[0 for _ in range(len(input_sequence))] for _ in range(min(max_motif_size, len(input_sequence)))]
 	for start_0based, end, motif in output_intervals:
 		row = len(motif) - 1
-		for i in range(start_0based, end + 1):
-			matrix[row][i] = abs(hash(bytes(motif, encoding="utf-8")) % 10 + 1)
+		if row >= len(matrix):
+			# a repeat that started inside --interval can extend past it with a motif longer than the plotted sequence
+			continue
+		for i in range(start_0based, end):
+			matrix[row][i] = zlib.crc32(bytes(motif, encoding="utf-8")) % 10 + 1
 
-	plot_periodicity_matrix(matrix, output_path)
+	plot_periodicity_matrix(matrix, output_path, score_denominator=len(input_sequence))

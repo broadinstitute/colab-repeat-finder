@@ -20,7 +20,9 @@ CHM13_REFERENCE_GENOME_FASTA = "gs://str-truth-set/chm13/ref/chm13v2.0.fa.gz"
 
 def run(cmd):
     print(cmd)
-    os.system(cmd)
+    exit_code = os.system(cmd)
+    if exit_code != 0:
+        raise RuntimeError(f"Command failed with exit code {exit_code}: {cmd}")
 
 
 def parse_args(batch_pipeline):
@@ -88,7 +90,7 @@ def main():
     for i, (chrom, start_0based, end) in enumerate(batches):
         if i < args.start_batch_i:
             continue
-        if args.n and i >= args.start_batch_i + args.n:
+        if args.n is not None and i >= args.start_batch_i + args.n:
             break
 
         output_prefix = f"{common_prefix}.{chrom}_{start_0based:09d}_{end:09d}"
@@ -128,72 +130,80 @@ def main():
         s1.output(f"{output_prefix}.bed.gz")
         s1.output(f"{output_prefix}.bed.gz.tbi")
 
-    concatenated_output_file = f"{common_prefix}.concatenated"
-    print(f"Generating combined output file: {concatenated_output_file}")
-    s2 = bp.new_step(
-        name="combine-step",
-        step_number=2,
-        image=STR_ANALYSIS_DOCKER_IMAGE,
-        storage="20Gi",
-        cpu=1,
-        localize_by=Localize.COPY,
-        delocalize_by=Delocalize.COPY,
-        output_dir=output_dir,
-    )
+    is_partial_run = args.start_batch_i > 0 or args.n is not None
+    if is_partial_run:
+        print(f"--start-batch-i/-n limited this run to {len(steps)} of {len(batches)} batches. "
+              f"Skipping the combine and merge steps since their output would be an incomplete catalog.")
+    else:
+        concatenated_output_file = f"{common_prefix}.concatenated"
+        print(f"Generating combined output file: {concatenated_output_file}")
+        s2 = bp.new_step(
+            name="combine-step",
+            step_number=2,
+            image=STR_ANALYSIS_DOCKER_IMAGE,
+            storage="20Gi",
+            cpu=1,
+            localize_by=Localize.COPY,
+            delocalize_by=Delocalize.COPY,
+            output_dir=output_dir,
+        )
 
-    for s1 in steps:
-        s2.depends_on(s1)
-        
-    s2.command("set -ex")
-    s2.command(f"gcloud storage cp {os.path.join(output_dir, f'**/{common_prefix}.chr*.bed.gz')} .")
-    s2.command(f"ls {common_prefix}.chr*.bed.gz | wc -l")
+        for s1 in steps:
+            s2.depends_on(s1)
 
-    s2.command(f"for i in {common_prefix}.chr*.bed.gz; do zcat $i >> {concatenated_output_file}.unsorted.bed; done")
-    # sort the concatenated bed file
-    s2.command(f"sort -k1,1 -k2,2n {concatenated_output_file}.unsorted.bed | uniq | bgzip > {concatenated_output_file}.bed.gz")
-    s2.command(f"tabix {concatenated_output_file}.bed.gz")
-    s2.command(f"gunzip -c {concatenated_output_file}.bed.gz | wc -l")
-    s2.output(f"{concatenated_output_file}.bed.gz")
-    s2.output(f"{concatenated_output_file}.bed.gz.tbi")
+        s2.command("set -ex")
+        s2.command(f"gcloud storage cp {os.path.join(output_dir, f'**/{common_prefix}.chr*.bed.gz')} .")
+        s2.command(f"ls {common_prefix}.chr*.bed.gz | wc -l")
 
-    s3 = bp.new_step(
-        name="merge-step",
-        step_number=3,
-        image=STR_ANALYSIS_DOCKER_IMAGE,
-        storage="20Gi",
-        cpu=2,
-        memory="highmem",
-        output_dir=output_dir,
-    )
+        s2.command(f"for i in {common_prefix}.chr*.bed.gz; do zcat $i >> {concatenated_output_file}.unsorted.bed; done")
+        # sort the concatenated bed file
+        s2.command(f"sort -k1,1 -k2,2n {concatenated_output_file}.unsorted.bed | uniq | bgzip > {concatenated_output_file}.bed.gz")
+        s2.command(f"tabix {concatenated_output_file}.bed.gz")
+        s2.command(f"gunzip -c {concatenated_output_file}.bed.gz | wc -l")
+        s2.output(f"{concatenated_output_file}.bed.gz")
+        s2.output(f"{concatenated_output_file}.bed.gz.tbi")
 
-    local_concatenated_bed, _ = s3.use_previous_step_outputs_as_inputs(s2)
-    s3.command(f"""python3 -u -m str_analysis.merge_loci \
-        --verbose \
-        --output-format BED \
-        --output-prefix {common_prefix} \
-        {local_concatenated_bed}
-    """)
+        s3 = bp.new_step(
+            name="merge-step",
+            step_number=3,
+            image=STR_ANALYSIS_DOCKER_IMAGE,
+            storage="20Gi",
+            cpu=2,
+            memory="highmem",
+            output_dir=output_dir,
+        )
 
-    s3.command("ls -l")
-    s3.command(f"gunzip -c {common_prefix}.bed.gz | wc -l")
+        local_concatenated_bed, _ = s3.use_previous_step_outputs_as_inputs(s2)
+        s3.command(f"""python3 -u -m str_analysis.merge_loci \
+            --verbose \
+            --output-format BED \
+            --output-prefix {common_prefix} \
+            {local_concatenated_bed}
+        """)
 
-    s3.output(f"{common_prefix}.bed.gz")
-    s3.output(f"{common_prefix}.bed.gz.tbi")
+        s3.command("ls -l")
+        s3.command(f"gunzip -c {common_prefix}.bed.gz | wc -l")
 
-    files_to_download_when_done.extend([
-        (os.path.join(output_dir, f"{common_prefix}.bed.gz"), "results"),
-        (os.path.join(output_dir, f"{common_prefix}.bed.gz.tbi"), "results")
-    ])
+        s3.output(f"{common_prefix}.bed.gz")
+        s3.output(f"{common_prefix}.bed.gz.tbi")
+
+        files_to_download_when_done.extend([
+            (os.path.join(output_dir, f"{common_prefix}.bed.gz"), "results"),
+            (os.path.join(output_dir, f"{common_prefix}.bed.gz.tbi"), "results")
+        ])
+
     bp.run()
 
-
-    # download results
-    for remote_path, destination_dir in files_to_download_when_done:
-        if not os.path.isdir(destination_dir):
-            print(f"Creating local directory: {destination_dir}")
-            os.mkdir(destination_dir)
-        print(f"Downloading {remote_path} to {destination_dir}/")
-        run(f"gsutil -m cp {remote_path} {destination_dir}")
+    if args.no_wait:
+        print("--no-wait was specified, so the batch may still be running remotely. Skipping download of results.")
+    else:
+        # download results
+        for remote_path, destination_dir in files_to_download_when_done:
+            if not os.path.isdir(destination_dir):
+                print(f"Creating local directory: {destination_dir}")
+                os.mkdir(destination_dir)
+            print(f"Downloading {remote_path} to {destination_dir}/")
+            run(f"gsutil -m cp {remote_path} {destination_dir}")
 
 
 if __name__ == "__main__":

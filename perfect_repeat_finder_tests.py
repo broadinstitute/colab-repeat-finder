@@ -146,6 +146,33 @@ class RepeatFinderTests(unittest.TestCase):
 		repeats = detect_repeats(seq, filter_settings)
 		self.assertEqual(repeats, [(5, 8, "G"), (18, 33, "CAG")], f"Error on sequence: {seq}")
 
+		# a repeat that starts in the last base of the interval is reported in full
+		left_flank = "CCGTAATGCCTTTCCCTAACAGAGTTTTTCGAACTCGTGTTGTCGAGCG"
+		right_flank = "ACGGAATTAGATCAGTTAAATGGCAGAAAACTGGCAGGGCTTTTAGTCG"
+		seq = left_flank + "GATTACACCT"*5 + right_flank
+		filter_settings = argparse.Namespace(
+			min_motif_size=1, max_motif_size=10, min_repeats=3, min_span=9, interval_start_0based=0, interval_end=50)
+		repeats = detect_repeats(seq, filter_settings)
+		self.assertEqual(repeats, [(49, 99, "GATTACACCT")], f"Error on sequence: {seq}")
+
+		# a repeat that starts after the interval is not reported
+		filter_settings = argparse.Namespace(
+			min_motif_size=1, max_motif_size=1, min_repeats=3, min_span=3, interval_start_0based=0, interval_end=4)
+		self.assertEqual(detect_repeats("CGTCAAAA", filter_settings), [])
+
+		# an interval whose start + end equals the sequence length is processed without errors
+		filter_settings = argparse.Namespace(
+			min_motif_size=1, max_motif_size=2, min_repeats=3, min_span=3, interval_start_0based=10, interval_end=30)
+		self.assertEqual(detect_repeats("ACGT"*10, filter_settings), [])
+
+
+	def test_min_repeats_1_does_not_fabricate_repeats_via_negative_index_wraparound(self):
+		# with --min-repeats 1, the look-ahead loop must not wrap around to the end of the sequence when
+		# comparing bases near the start of a run (regression test for a bug where seq[i+1-period] read
+		# from the end of the string whenever i+1 < period)
+		filter_settings = argparse.Namespace(min_motif_size=5, max_motif_size=5, min_repeats=1, min_span=1)
+		self.assertEqual(detect_repeats("AGTCACGGGTCA", filter_settings), [])
+
 
 	def test_fasta_input_without_interval(self):
 		"""Regression test for https://github.com/broadinstitute/colab-repeat-finder/issues/4"""
