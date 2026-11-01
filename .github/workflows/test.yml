@@ -17,11 +17,12 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ['3.9', '3.10', '3.11', '3.12']
-        # macos-latest is arm64; actions/setup-python has no darwin-arm64 build below 3.10.11, so the
-        # macos + 3.9 leg can't install Python. Keep 3.9 coverage on ubuntu only.
-        exclude:
-          - os: macos-latest
+        python-version: ['3.10', '3.11', '3.12']
+        # Python 3.9 is tested on a pinned ubuntu-24.04 runner only, because actions/setup-python has no
+        # 3.9 build for Ubuntu 26.04 (what ubuntu-latest now points to) or for darwin-arm64
+        # (macos-latest). Keep this leg: the docker image runs on python:3.9-slim.
+        include:
+          - os: ubuntu-24.04
             python-version: '3.9'
       fail-fast: false
 
