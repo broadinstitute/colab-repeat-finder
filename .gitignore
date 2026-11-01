@@ -38,6 +38,6 @@ Cargo.lock
 
 # Claude Code
 .claude/
-.code_review_local/
+.code_review/
 .memory/
 CLAUDE.md
